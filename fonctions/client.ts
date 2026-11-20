@@ -241,7 +241,8 @@ function echapper(s: string) {
 
 
 const base = () => (Deno.env.get("HELLOASSO_API") || "https://api.helloasso.com").replace(/\/$/, "");
-const org = () => Deno.env.get("HELLOASSO_ORG") || "";
+const org = () => (Deno.env.get("HELLOASSO_ORG") || "").trim();
+const UA = "ACTES-Chalet-Bellevue/1.0 (+https://www.chalet-bellevue.fr)";
 
 function helloassoConfigure(): boolean {
   return !!(Deno.env.get("HELLOASSO_CLIENT_ID") && Deno.env.get("HELLOASSO_CLIENT_SECRET") && org());
@@ -252,10 +253,10 @@ async function jetonApi(): Promise<string> {
   if (cache && cache.fin > Date.now() + 60_000) return cache.jeton;
   const r = await fetch(base() + "/oauth2/token", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: Deno.env.get("HELLOASSO_CLIENT_ID")!, client_secret: Deno.env.get("HELLOASSO_CLIENT_SECRET")! }),
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": UA },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: (Deno.env.get("HELLOASSO_CLIENT_ID") || "").trim(), client_secret: (Deno.env.get("HELLOASSO_CLIENT_SECRET") || "").trim() }),
   });
-  if (!r.ok) throw new Error("HelloAsso : identifiants refusés (" + r.status + ")");
+  if (!r.ok) throw new Error("HelloAsso : identifiants refusés (" + r.status + ") " + (await r.text()).replace(/\s+/g, " ").slice(0, 300));
   const j = await r.json();
   cache = { jeton: j.access_token, fin: Date.now() + (Number(j.expires_in) || 1800) * 1000 };
   return cache.jeton;
@@ -264,7 +265,7 @@ async function jetonApi(): Promise<string> {
 async function api(chemin: string, init: RequestInit = {}) {
   const r = await fetch(base() + "/v5/organizations/" + encodeURIComponent(org()) + chemin, {
     ...init,
-    headers: { authorization: "Bearer " + (await jetonApi()), "content-type": "application/json", accept: "application/json", ...(init.headers || {}) },
+    headers: { authorization: "Bearer " + (await jetonApi()), "content-type": "application/json", accept: "application/json", "user-agent": UA, ...(init.headers || {}) },
   });
   const t = await r.text();
   if (!r.ok) throw new Error("HelloAsso " + r.status + " : " + t.slice(0, 300));
@@ -409,11 +410,15 @@ Deno.serve(async (req) => {
       const montant = type === "acompte" ? (e[0] ? e[0].reste : 0) : Math.max(0, reste(r));
       if (!(montant >= 1)) return erreur("Il n'y a rien à régler pour le moment.", 409);
       const page = URL_SITE + "/sejour/" + r.jeton;
-      const intent = await creerPaiement({
+      let intent: any;
+      try { intent = await creerPaiement({
         montant, email: r.email, contact: r.contact,
         libelle: (type === "acompte" ? "Acompte" : "Solde") + " — séjour au " + cfg.nomChalet + " du " + r.debut.split("-").reverse().join("/") + " au " + r.fin.split("-").reverse().join("/"),
         metadata: { resa: String(r.id), type }, retour: page + "?paiement=retour", erreur: page + "?paiement=erreur", annuler: page,
-      });
+      }); } catch (e) {
+        console.error("paiement HelloAsso", String((e as Error).message || e));
+        return erreur("Le paiement en ligne est momentanément indisponible : merci de réessayer plus tard ou de contacter l'association.", 502);
+      }
       await fusionDoc(sb, "crm_actes_resas", r.id, { paiementsEnAttente: [...(r.paiementsEnAttente || []), { intentId: String(intent.id), type, montant, le: new Date().toISOString() }] });
       return json({ url: intent.redirectUrl });
     }

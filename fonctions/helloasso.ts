@@ -241,7 +241,8 @@ function parseIcs(t: string) {
 
 
 const base = () => (Deno.env.get("HELLOASSO_API") || "https://api.helloasso.com").replace(/\/$/, "");
-const org = () => Deno.env.get("HELLOASSO_ORG") || "";
+const org = () => (Deno.env.get("HELLOASSO_ORG") || "").trim();
+const UA = "ACTES-Chalet-Bellevue/1.0 (+https://www.chalet-bellevue.fr)";
 
 function helloassoConfigure(): boolean {
   return !!(Deno.env.get("HELLOASSO_CLIENT_ID") && Deno.env.get("HELLOASSO_CLIENT_SECRET") && org());
@@ -252,10 +253,10 @@ async function jetonApi(): Promise<string> {
   if (cache && cache.fin > Date.now() + 60_000) return cache.jeton;
   const r = await fetch(base() + "/oauth2/token", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: Deno.env.get("HELLOASSO_CLIENT_ID")!, client_secret: Deno.env.get("HELLOASSO_CLIENT_SECRET")! }),
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": UA },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: (Deno.env.get("HELLOASSO_CLIENT_ID") || "").trim(), client_secret: (Deno.env.get("HELLOASSO_CLIENT_SECRET") || "").trim() }),
   });
-  if (!r.ok) throw new Error("HelloAsso : identifiants refusés (" + r.status + ")");
+  if (!r.ok) throw new Error("HelloAsso : identifiants refusés (" + r.status + ") " + (await r.text()).replace(/\s+/g, " ").slice(0, 300));
   const j = await r.json();
   cache = { jeton: j.access_token, fin: Date.now() + (Number(j.expires_in) || 1800) * 1000 };
   return cache.jeton;
@@ -264,7 +265,7 @@ async function jetonApi(): Promise<string> {
 async function api(chemin: string, init: RequestInit = {}) {
   const r = await fetch(base() + "/v5/organizations/" + encodeURIComponent(org()) + chemin, {
     ...init,
-    headers: { authorization: "Bearer " + (await jetonApi()), "content-type": "application/json", accept: "application/json", ...(init.headers || {}) },
+    headers: { authorization: "Bearer " + (await jetonApi()), "content-type": "application/json", accept: "application/json", "user-agent": UA, ...(init.headers || {}) },
   });
   const t = await r.text();
   if (!r.ok) throw new Error("HelloAsso " + r.status + " : " + t.slice(0, 300));
