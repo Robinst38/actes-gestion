@@ -157,7 +157,7 @@ const REGLEMENT_DEFAUT = "• Respecter le calme entre 22 h et 8 h, par égard p
 function config(c: any) {
   const o = { nomChalet: "Chalet Bellevue", ville: "Bagnères-de-Luchon", acomptePct: 30, soldeJours: 30, caution: "", infosPratiques: "", lienAvis: "", telAsso: "", conditions: CONDITIONS_DEFAUT, reglement: REGLEMENT_DEFAUT, adhesionSejour: "", acompteArrondi: false, livretToken: "", wifiNom: "", wifiCle: "", ...(c || {}) };
   o.modeles = { ...MODELES, ...((c && c.modeles) || {}) };
-  o.autoEmails = { confirmation: false, j7: false, avis: false, relances: false, recap: false, ...((c && c.autoEmails) || {}) };
+  o.autoEmails = { confirmation: false, j7: false, avis: false, relances: false, recap: false, menage: false, ...((c && c.autoEmails) || {}) };
   return o;
 }
 
@@ -286,6 +286,43 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Planning du ménage : chaque lundi, les rotations des 14 prochains jours au prestataire
+  let menage = false;
+  const pm = cfg.prestataireMenage || {};
+  const lundi = new Date(t + "T12:00:00Z").getUTCDay() === 1;
+  if (auto.menage && pm.email && (lundi || new URL(req.url).searchParams.get("menage") === "1") && !journal.has("planning_menage__" + t)) {
+    const platsM = (await lireCollection(sb, "actes_plateformes")).filter((p) => p.arrivee && p.depart && !/annul/i.test(p.statut || ""));
+    const sejM = [
+      ...resas.filter((r) => actif(r) && r.debut && r.fin).map((r) => ({ k: "d" + r.id, nom: r.groupe || r.contact || "Réservation", debut: r.debut, fin: r.fin, pers: pers(r), src: "Direct" })),
+      ...platsM.map((p) => ({ k: "p" + p.id, nom: p.guest || p.platform || "Voyageur", debut: p.arrivee, fin: p.depart, pers: num(p.guests), src: p.platform || "Plateforme" })),
+    ];
+    const fin14 = new Date(t + "T12:00:00Z"); fin14.setUTCDate(fin14.getUTCDate() + 14);
+    const lim = fin14.toISOString().slice(0, 10);
+    const rot = sejM.filter((x) => x.fin >= t && x.fin <= lim).sort((a, b) => a.fin.localeCompare(b.fin)).map((x) => {
+      const nx = sejM.filter((y) => y.debut >= x.fin && y.k !== x.k).sort((a, b) => a.debut.localeCompare(b.debut))[0];
+      return { x, nx, meme: !!nx && nx.debut === x.fin };
+    });
+    const lignes = rot.map(({ x, nx, meme }) => `${fd(x.fin)} — départ de ${x.nom} (${x.src})` +
+      (nx ? (meme ? ` — ⚠ ARRIVÉE LE JOUR MÊME : ${nx.nom}, linge pour ${nx.pers || "?"} pers.` : ` — prochaine arrivée le ${fd(nx.debut)} (${nx.nom}, linge pour ${nx.pers || "?"} pers.)`) : " — pas d'arrivée prévue ensuite"));
+    const intro = `Bonjour${pm.nom ? " " + pm.nom : ""},\n\n`;
+    const corps = intro + (lignes.length ? `Voici les ménages à prévoir au ${cfg.nomChalet} dans les 2 prochaines semaines :\n\n${lignes.map((l) => "• " + l).join("\n")}\n\n` : `Aucun départ n'est prévu au ${cfg.nomChalet} dans les 2 prochaines semaines.\n\n`) +
+      `Merci de nous confirmer vos disponibilités${cfg.telAsso ? " (" + cfg.telAsso + ")" : ""}.\n\nBonne semaine,\n${ent.nom || "L'association"}`;
+    const html = `<div style="font:14px/1.55 Arial,sans-serif;color:#23302A"><p>${echapper(intro.trim())}</p>` +
+      (lignes.length ? `<p>Voici les ménages à prévoir au <b>${echapper(cfg.nomChalet)}</b> dans les 2 prochaines semaines :</p><table style="border-collapse:collapse;width:100%">` +
+        rot.map(({ x, nx, meme }) => `<tr><td style="padding:8px;border-top:1px solid #E5DED0;white-space:nowrap;vertical-align:top"><b>${echapper(fd(x.fin))}</b></td><td style="padding:8px;border-top:1px solid #E5DED0">Départ de ${echapper(x.nom)} <span style="color:#6E7469">(${echapper(x.src)})</span><br>` +
+          (nx ? (meme ? `<b style="color:#B3261E">⚠ Arrivée le jour même</b> : ${echapper(nx.nom)} — linge pour <b>${nx.pers || "?"}</b> pers.` : `Prochaine arrivée le ${echapper(fd(nx.debut))} : ${echapper(nx.nom)} — linge pour <b>${nx.pers || "?"}</b> pers.`) : `<span style="color:#6E7469">Pas d'arrivée prévue ensuite</span>`) + `</td></tr>`).join("") + `</table>`
+        : `<p>Aucun départ n'est prévu au <b>${echapper(cfg.nomChalet)}</b> dans les 2 prochaines semaines.</p>`) +
+      `<p>Merci de nous confirmer vos disponibilités${cfg.telAsso ? " (" + echapper(cfg.telAsso) + ")" : ""}.</p><p>Bonne semaine,<br>${echapper(ent.nom || "L'association")}</p></div>`;
+    try {
+      if (!essai) {
+        await envoyer({ to: pm.email, subject: `Planning ménage — ${cfg.nomChalet} — semaine du ${fd(t)}`, body: corps, htmlBody: html, replyTo: ent.email || undefined });
+        await ecrireDoc(sb, "chalet_envois_auto", "planning_menage__" + t, { type: "planning_menage", date: t, a: pm.email, rotations: rot.length });
+      }
+      faits.push({ resa: "Prestataire ménage", type: "planning ménage", a: pm.email });
+      menage = true;
+    } catch (e) { erreurs.push({ resa: "Prestataire ménage", type: "planning ménage", erreur: e instanceof Error ? e.message : String(e) }); }
+  }
+
   // Récapitulatif du jour pour le bureau
   let recap = false;
   if (auto.recap && cfg.recapEmail) {
@@ -318,5 +355,5 @@ Deno.serve(async (req) => {
     }
   }
   if (!essai) await ecrireDoc(sb, "chalet_sync", "emails", { date: new Date().toISOString(), envoyes: faits, erreurs, recap });
-  return json({ ok: true, essai, envoyes: faits, erreurs, recap });
+  return json({ ok: true, essai, envoyes: faits, erreurs, recap, menage });
 });
