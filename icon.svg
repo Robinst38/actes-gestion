@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="26" fill="#1F3D2B"/><circle cx="86" cy="34" r="11" fill="#B98D46"/><path d="M6 96 L40 50 L56 70 L76 44 L114 96 Z" fill="#DCE5DD"/><path d="M40 50 L49 62 L44 60 L38 66 L33 60 Z M76 44 L86 57 L80 55 L74 61 L68 55 Z" fill="#FAF6EF"/><path d="M36 96 V74 L56 58 L76 74 V96 Z" fill="#C0693E"/><path d="M31 77 L56 56 L81 77" fill="none" stroke="#C0693E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><rect x="51" y="80" width="10" height="16" rx="1.5" fill="#1F3D2B"/><rect x="6" y="95" width="108" height="5" rx="2.5" fill="#DCE5DD"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<rect width="200" height="200" rx="44" fill="#1f3d2b"/>
+<g transform="translate(18,15) scale(0.82)">
+<circle cx="146" cy="54" r="12" fill="#b98d46"/>
+<polygon points="12,152 64,72 108,152" fill="#faf6ef" opacity="0.35"/>
+<polygon points="96,152 138,88 178,152" fill="#faf6ef" opacity="0.22"/>
+<rect x="38" y="181" width="124" height="5" rx="2.5" fill="#faf6ef" opacity="0.18"/>
+<polygon points="53,152 100,83 147,152" fill="#faf6ef"/>
+<polygon points="86,109 100,89 114,109 107,109 100,98 93,109" fill="#1f3d2b" opacity="0.92"/>
+<rect x="76" y="152" width="48" height="34" fill="#1f3d2b" stroke="#faf6ef" stroke-width="3"/>
+<rect x="81" y="160" width="10" height="10" rx="1.5" fill="#faf6ef" opacity="0.85"/>
+<rect x="109" y="160" width="10" height="10" rx="1.5" fill="#faf6ef" opacity="0.85"/>
+<path d="M92,186 V168 a8,8 0 0 1 16,0 v18 z" fill="#c0693e"/>
+</g>
+</svg>
