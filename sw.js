@@ -1,6 +1,6 @@
 /* Service worker : l'appli s'ouvre instantanément et reste affichable sans réseau.
    Les données (Supabase) ne sont jamais mises en cache ici. */
-const VERSION = "dash-20261120";
+const VERSION = "maj-20261120";
 const CACHE = "actes-" + VERSION;
 const COQUILLE = ["./", "index.html", "app.css", "config.js", "supabase.js", "591.supabase.js", "claude-shim.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
@@ -19,7 +19,7 @@ self.addEventListener("fetch", (e) => {
   if (!memeSite && !polices) return;
   if (e.request.mode === "navigate") {
     // page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne
-    e.respondWith(fetch(e.request).then((r) => { const c = r.clone(); caches.open(CACHE).then((x) => x.put("index.html", c)); return r; }).catch(() => caches.match("index.html")));
+    e.respondWith(fetch(u.href, { cache: "no-cache", credentials: "same-origin" }).then((r) => { if (r.ok) { const c = r.clone(); caches.open(CACHE).then((x) => x.put("index.html", c)); } return r; }).catch(() => caches.match("index.html")));
     return;
   }
   e.respondWith(caches.match(e.request).then((m) => m || fetch(e.request).then((r) => { if (r.ok || r.type === "opaque") { const c = r.clone(); caches.open(CACHE).then((x) => x.put(e.request, c)); } return r; })));
