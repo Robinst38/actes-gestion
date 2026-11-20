@@ -168,24 +168,29 @@ function parseIcs(t: string) {
 
 // ----- site/index.ts -----
 // Passerelle entre le site public (www.chalet-bellevue.fr) et le logiciel.
-//   GET  → dates occupées (réservations du logiciel + Airbnb/Booking), tarifs et documents publics
-//   POST → enregistre une demande de réservation faite sur le site (en-tête x-site-secret obligatoire)
+//   GET                       → dates occupées, tarifs, documents publiés (public)
+//   GET  + x-site-secret      → idem + « sync » : décisions et paiements des demandes du site, infos pratiques
+//   POST + x-site-secret      → enregistre une demande faite sur le site
+//   POST + x-site-secret {action:"statuts"} → reporte dans le logiciel une décision prise sur le site
 
 
 function nuits(debut: string, fin: string, out: Set<string>, depuis: string) {
   const n = Math.min(nbN(debut, fin), 400);
   for (let i = 0; i < n; i++) { const d = addD(debut, i); if (d >= depuis) out.add(d); }
 }
-const dernierJour = (m: number) => new Date(Date.UTC(2024, m, 0)).getUTCDate();
+const texte = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const sb = admin();
+  const secret = Deno.env.get("SITE_SECRET");
+  const autorise = !!secret && req.headers.get("x-site-secret") === secret;
 
   if (req.method === "GET") {
     const t = auj(), depuis = addD(t, -1);
     const blocked = new Set<string>();
-    for (const r of await lireCollection(sb, "crm_actes_resas")) {
+    const resas = await lireCollection(sb, "crm_actes_resas");
+    for (const r of resas) {
       if (!r.debut || !r.fin || ["annulee", "demande"].includes(r.statut)) continue;
       nuits(r.debut, r.fin, blocked, depuis);
     }
@@ -194,35 +199,65 @@ Deno.serve(async (req) => {
       nuits(p.arrivee, p.depart, blocked, depuis);
     }
     const cfg = (await lireDoc(sb, "chalet_config", "main")) || {};
-    // Tarifs : uniquement si une grille « site » est définie dans le logiciel (sinon le site garde la sienne)
+    // Tarifs : uniquement si la grille du logiciel a un prix « nuit chalet » (sinon le site garde la sienne)
     const rates = (cfg.saisons || [])
       .filter((s: any) => s && s.du && s.au && num(s.nuitChalet) > 0)
       .map((s: any) => ({ label: s.nom || "Tarif", start_month: num(String(s.du).slice(0, 2)), end_month: num(String(s.au).slice(0, 2)), price_per_night: num(s.nuitChalet), min_nights: num(cfg.minNuits) || 2 }));
-    const documents = { reglement: cfg.reglement || null, conditions: cfg.conditions || null };
-    return new Response(JSON.stringify({ blocked: [...blocked].sort(), rates: rates.length ? rates : null, documents, maj: new Date().toISOString() }), {
+    // Documents : seulement ceux que le bureau a choisi de publier
+    const documents = {
+      reglement: cfg.publierReglement ? texte(cfg.reglement) : null,
+      conditions: cfg.publierConditions ? texte(cfg.conditions) : null,
+    };
+    const out: Record<string, unknown> = { blocked: [...blocked].sort(), rates: rates.length ? rates : null, documents, maj: new Date().toISOString() };
+    if (autorise) {
+      out.sync = {
+        resas: resas.filter((r) => r.siteId).map((r) => ({ siteId: String(r.siteId), statut: r.statut || "demande", paye: paye(r) })),
+        infosPratiques: cfg.publierInfos ? texte(cfg.infosPratiques) : null,
+      };
+    }
+    return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
     });
   }
 
   if (req.method === "POST") {
-    const secret = Deno.env.get("SITE_SECRET");
-    if (!secret || req.headers.get("x-site-secret") !== secret) return erreur("Non autorisé.", 401);
+    if (!autorise) return erreur("Non autorisé.", 401);
     const b = await req.json().catch(() => null);
-    if (!b || !b.checkIn || !b.checkOut) return erreur("Demande incomplète.");
+    if (!b) return erreur("Demande incomplète.");
+
+    // Décisions prises dans l'espace admin du site → reportées sur les demandes encore « Demande » du logiciel
+    if (b.action === "statuts") {
+      const faits: string[] = [];
+      for (const s of Array.isArray(b.statuts) ? b.statuts.slice(0, 200) : []) {
+        const id = "site_" + String(s.siteId || "").replace(/[^\w-]/g, "");
+        const r = await lireDoc(sb, "crm_actes_resas", id);
+        if (!r || r.statut !== "demande") continue;
+        if (s.status === "confirmed") await fusionDoc(sb, "crm_actes_resas", id, { statut: "confirmee", confirmeLe: auj() });
+        else if (s.status === "cancelled") await fusionDoc(sb, "crm_actes_resas", id, { statut: "annulee" });
+        else continue;
+        faits.push(id);
+      }
+      return json({ ok: true, faits });
+    }
+
+    if (!b.checkIn || !b.checkOut) return erreur("Demande incomplète.");
     const id = b.siteId ? "site_" + String(b.siteId).replace(/[^\w-]/g, "") : "site_" + Date.now().toString(36);
     if (await lireDoc(sb, "crm_actes_resas", id)) return json({ ok: true, deja: true, id });
     const adultes = Math.max(0, num(b.adults)), enfants = Math.max(0, num(b.minors));
+    const montant = num(b.montant);
+    const statut = b.siteStatus === "confirmed" ? "confirmee" : "demande";
     const notes = [
       "Demande reçue depuis le site internet" + (b.siteId ? " (n° " + b.siteId + ")" : "") + ".",
+      montant > 0 ? "Montant calculé par le site : " + montant.toFixed(2).replace(".", ",") + " € (location, ménage, adhésion et taxe de séjour compris)." : "",
       b.message ? "Message : " + String(b.message).slice(0, 2000) : "",
       "Paiement souhaité : " + (b.paymentMethod === "online" ? "en ligne" : "hors ligne") + ".",
     ].filter(Boolean).join("\n");
     await ecrireDoc(sb, "crm_actes_resas", id, {
-      id, creeLe: auj(), canal: "Site web", statut: "demande",
+      id, creeLe: auj(), canal: "Site web", statut, ...(statut === "confirmee" ? { confirmeLe: auj() } : {}),
       groupe: "", contact: String(b.name || "").slice(0, 120), email: String(b.email || "").trim().toLowerCase().slice(0, 200), tel: String(b.phone || "").slice(0, 40),
       debut: String(b.checkIn).slice(0, 10), fin: String(b.checkOut).slice(0, 10),
       adultes: String(adultes), enfants: String(enfants), personnes: String(adultes + enfants),
-      options: { menage: !!b.wantsCleaning }, tarif: "", paiements: [], notes, siteId: b.siteId || null,
+      options: { menage: !!b.wantsCleaning }, tarif: montant > 0 ? String(montant) : "", paiements: [], notes, siteId: b.siteId ? String(b.siteId) : null,
     });
     return json({ ok: true, id }, 201);
   }
