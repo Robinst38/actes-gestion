@@ -1,0 +1,30 @@
+{
+  "name": "A.C.T.E.S — Gestion du Chalet Bellevue",
+  "short_name": "ACTES Gestion",
+  "description": "Réservations, facturation, trésorerie et vie associative du Chalet Bellevue (Luchon).",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF6EF",
+  "theme_color": "#1F3D2B",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,298 @@
+/*
+ * A.C.T.E.S — passerelle Supabase
+ * L'application a été écrite pour l'API « window.claude.use(...) » des artefacts Claude.
+ * Ce fichier fournit la même API, branchée sur Supabase (base de données, comptes,
+ * temps réel, fonctions serveur), pour que l'appli tourne comme un logiciel autonome.
+ */
+(function () {
+  "use strict";
+  var CFG = window.ACTES_CONFIG || {};
+  var URL0 = location.hash + location.search;
+  if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || /VOTRE|XXXX/.test(CFG.supabaseUrl + CFG.supabaseAnonKey)) {
+    document.addEventListener("DOMContentLoaded", function () { ecranMessage("Configuration manquante", "Renseigne l'adresse et la clé publique Supabase dans le fichier <b>web/config.js</b> (voir GUIDE.md, étape 2)."); });
+    window.claude = { use: function () { return new Promise(function () {}); } };
+    return;
+  }
+  var sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" }
+  });
+  window.__actesSupabase = sb;
+
+  /* ---------------- session & rôle ---------------- */
+  var session = null, profil = null, pretResolve, pret = new Promise(function (r) { pretResolve = r; });
+  async function chargerProfil() {
+    var r = await sb.from("acces").select("email,nom,role").eq("email", (session.user.email || "").toLowerCase()).maybeSingle();
+    profil = r.data || null;
+    return profil;
+  }
+  async function surSession(s, evt) {
+    session = s;
+    if (!s) { afficherConnexion(); return; }
+    if (evt === "PASSWORD_RECOVERY" || /type=(invite|recovery)/.test(URL0) || window.__actesDoitChoisirMdp) {
+      window.__actesDoitChoisirMdp = true; afficherChoixMdp(); return;
+    }
+    await chargerProfil();
+    if (!profil) { ecranMessage("Accès non autorisé", "Le compte <b>" + esc(s.user.email) + "</b> n'a pas encore d'accès à l'application. Demande à un administrateur de l'ajouter.", true); return; }
+    fermerEcran(); pretResolve(true); badgeCompte(); ecouterAutres();
+  }
+  sb.auth.onAuthStateChange(function (evt, s) {
+    if (evt === "TOKEN_REFRESHED") { session = s; return; }
+    if (evt === "SIGNED_OUT") { session = null; location.reload(); return; }
+    if (evt === "INITIAL_SESSION" || evt === "SIGNED_IN" || evt === "PASSWORD_RECOVERY" || evt === "USER_UPDATED") setTimeout(function () { surSession(s, evt); }, 0);
+  });
+
+  /* ---------------- base de données (API compatible) ---------------- */
+  var TABLE = "documents";
+  function decoupe(path) { var i = path.indexOf("/"); return [path.slice(0, i), path.slice(i + 1)]; }
+  function snapDoc(id, data) { return { id: id, exists: data != null, data: function () { return data == null ? undefined : JSON.parse(JSON.stringify(data)); } }; }
+  function snapCol(rows) { var docs = rows.map(function (r) { return snapDoc(r.id, r.data); }); return { docs: docs, size: docs.length, empty: !docs.length, forEach: function (f) { docs.forEach(f); } }; }
+  function erreur(e) { var x = new Error((e && e.message) || "Erreur de base de données"); x.code = (e && e.code) || "db"; return x; }
+  async function lireCollection(col) {
+    var out = [], pas = 1000, from = 0;
+    for (;;) {
+      var r = await sb.from(TABLE).select("id,data").eq("collection", col).order("id").range(from, from + pas - 1);
+      if (r.error) throw erreur(r.error);
+      out = out.concat(r.data || []);
+      if (!r.data || r.data.length < pas) break;
+      from += pas;
+    }
+    return out;
+  }
+  /* abonnements temps réel partagés par collection */
+  var canaux = {};
+  function abonner(col, surChange) {
+    var c = canaux[col];
+    if (!c) {
+      c = canaux[col] = { ecouteurs: new Set(), canal: null };
+      c.canal = sb.channel("col:" + col)
+        .on("postgres_changes", { event: "*", schema: "public", table: TABLE, filter: "collection=eq." + col }, function (p) { c.ecouteurs.forEach(function (f) { try { f(p); } catch (e) {} }); })
+        .subscribe();
+    }
+    c.ecouteurs.add(surChange);
+    return function () { c.ecouteurs.delete(surChange); if (!c.ecouteurs.size) { sb.removeChannel(c.canal); delete canaux[col]; } };
+  }
+  function refDoc(col, id) {
+    return {
+      id: id, path: col + "/" + id,
+      get: async function () { var r = await sb.from(TABLE).select("data").eq("collection", col).eq("id", id).maybeSingle(); if (r.error) throw erreur(r.error); return snapDoc(id, r.data ? r.data.data : null); },
+      set: async function (data, opts) {
+        if (opts && opts.merge) return this.update(data);
+        var r = await sb.from(TABLE).upsert({ collection: col, id: id, data: nettoie(data) }, { onConflict: "collection,id" });
+        if (r.error) throw erreur(r.error);
+      },
+      update: async function (patch) { var r = await sb.rpc("doc_update", { p_col: col, p_id: id, p_patch: nettoie(patch) }); if (r.error) throw erreur(r.error); },
+      delete: async function () { var r = await sb.from(TABLE).delete().eq("collection", col).eq("id", id); if (r.error) throw erreur(r.error); },
+      onSnapshot: function (cb, cbErr) {
+        var actif = true, self = this;
+        self.get().then(function (s) { actif && cb(s); }).catch(function (e) { cbErr && cbErr(e); });
+        var stop = abonner(col, function (p) { var row = p.new && p.new.id ? p.new : p.old; if (!row || row.id !== id) return; cb(snapDoc(id, p.eventType === "DELETE" ? null : p.new.data)); });
+        return function () { actif = false; stop(); };
+      }
+    };
+  }
+  function refCol(col) {
+    return {
+      id: col,
+      doc: function (id) { return refDoc(col, id || ("d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8))); },
+      add: async function (data) { var d = this.doc(); await d.set(data); return d; },
+      get: async function () { return snapCol(await lireCollection(col)); },
+      onSnapshot: function (cb, cbErr) {
+        var actif = true, cache = new Map(), pret_ = false, file = [];
+        function emettre() { cb(snapCol(Array.from(cache.values()))); }
+        function appliquer(p) {
+          if (p.eventType === "DELETE") { if (p.old && p.old.id) cache.delete(p.old.id); }
+          else if (p.new && p.new.id) cache.set(p.new.id, { id: p.new.id, data: p.new.data });
+        }
+        var stop = abonner(col, function (p) { if (!pret_) { file.push(p); return; } appliquer(p); if (actif) emettre(); });
+        lireCollection(col).then(function (rows) {
+          rows.forEach(function (r) { cache.set(r.id, r); });
+          file.forEach(appliquer); file = []; pret_ = true; if (actif) emettre();
+        }).catch(function (e) { cbErr && cbErr(e); });
+        return function () { actif = false; stop(); };
+      }
+    };
+  }
+  function nettoie(o) { return JSON.parse(JSON.stringify(o == null ? {} : o)); }
+  var db = { collection: refCol, doc: function (path) { var p = decoupe(path); return refDoc(p[0], p[1]); } };
+
+  /* ---------------- fonctions serveur ---------------- */
+  async function fonction(nom, corps) {
+    var r = await sb.functions.invoke(nom, { body: corps || {} });
+    if (r.error) {
+      var msg = r.error.message || "Erreur serveur";
+      try { var j = await r.error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      var x = new Error(msg); x.code = /non configur/i.test(msg) ? "indisponible" : "serveur"; throw x;
+    }
+    return r.data;
+  }
+  function blobB64(b) { return new Promise(function (ok, ko) { var f = new FileReader(); f.onload = function () { ok(String(f.result).split(",")[1]); }; f.onerror = ko; f.readAsDataURL(b); }); }
+  var mcp = {
+    callTool: async function (serveur, outil, args) {
+      args = args || {};
+      if (serveur === "Gmail") {
+        if (outil === "create_draft") { var e = new Error("Les brouillons ne sont pas disponibles : utilise « Envoyer »."); e.code = "indisponible"; throw e; }
+        var res = await fonction("envoyer-email", args);
+        return { payload: res, content: [{ type: "text", text: JSON.stringify(res) }] };
+      }
+      if (serveur === "Google Calendar") {
+        var a = await fonction("agenda", { action: outil, args: args });
+        return { payload: a, content: [{ type: "text", text: JSON.stringify(a) }] };
+      }
+      var x = new Error("Service « " + serveur + " » non disponible dans cette version."); x.code = "indisponible"; throw x;
+    }
+  };
+  var sample = {
+    limits: async function () { return { images: { mediaTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"] } }; },
+    json: async function (prompt, opts) { return (await appelIA(prompt, opts, "json")).resultat; },
+    text: async function (prompt, opts) { return (await appelIA(prompt, opts, "text")).resultat; }
+  };
+  async function appelIA(prompt, opts, mode) {
+    var imgs = [];
+    var src = (opts && opts.images) || [];
+    for (var i = 0; i < src.length; i++) { var b = src[i]; if (b instanceof Blob) imgs.push({ mediaType: b.type || "image/jpeg", data: await blobB64(b) }); }
+    var messages = opts && opts.messages;
+    return fonction("ia", { prompt: prompt, images: imgs, mode: mode, messages: messages, system: opts && opts.system });
+  }
+  var user = {
+    isOwner: async function () { return !!profil && profil.role === "admin"; },
+    can: async function (perm) { if (!profil) return false; if (perm === "data.write") return profil.role !== "lecture"; return true; },
+    info: async function () { return { email: session && session.user.email, nom: profil && profil.nom, role: profil && profil.role }; }
+  };
+  var downloads = {
+    save: async function (o) { var u = URL.createObjectURL(o.data instanceof Blob ? o.data : new Blob([o.data])); var a = document.createElement("a"); a.href = u; a.download = o.filename || "fichier"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); return { ok: true }; }
+  };
+  var permissions = { manage: async function () { return true; } };
+  var caps = { db: db, mcp: mcp, sample: sample, user: user, downloads: downloads, permissions: permissions, comments: null };
+  window.claude = {
+    use: async function (nom) { await pret; return caps.hasOwnProperty(nom) ? caps[nom] : null; }
+  };
+  window.__actesServeur = { fonction: fonction, profil: function () { return profil; }, supabase: sb };
+
+  /* ---------------- interface : connexion & compte ---------------- */
+  var VERT = "#1F3D2B", OR = "#C0693E";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  var css = ".ax-ov{position:fixed;inset:0;z-index:2147483000;background:linear-gradient(160deg,#1F3D2B,#2A4D38 60%,#3B5E46);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,system-ui,sans-serif}" +
+    ".ax-box{background:#FAF6EF;border-radius:18px;max-width:380px;width:100%;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);color:#23302A}" +
+    ".ax-box h1{font-family:Fraunces,Georgia,serif;font-size:24px;margin:8px 0 2px;color:#1F3D2B;text-align:center}.ax-sub{font-size:12px;letter-spacing:.12em;color:#B98D46;text-align:center;margin-bottom:20px}" +
+    ".ax-box label{display:block;font-size:12px;font-weight:600;color:#6E7469;margin:12px 0 4px}.ax-box input,.ax-box select{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #E8E3D8;border-radius:10px;font-size:15px;background:#fff}" +
+    ".ax-btn{width:100%;margin-top:18px;padding:12px;border:0;border-radius:10px;background:" + OR + ";color:#fff;font-weight:700;font-size:15px;cursor:pointer}.ax-btn[disabled]{opacity:.6}" +
+    ".ax-lien{background:none;border:0;color:" + OR + ";font-size:13px;margin-top:12px;cursor:pointer;width:100%}.ax-msg{font-size:13px;margin-top:12px;text-align:center;min-height:18px}.ax-err{color:#C2410C}.ax-ok{color:#2E6B3A}" +
+    ".ax-badge{position:fixed;top:10px;right:12px;z-index:2147482000;width:34px;height:34px;border-radius:50%;border:2px solid #fff;background:" + VERT + ";color:#fff;font:700 14px Inter,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)}" +
+    ".ax-menu{position:fixed;top:50px;right:12px;z-index:2147482001;background:#fff;border:1px solid #E8E3D8;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:12px;min-width:230px;font:14px Inter,sans-serif;color:#23302A}" +
+    ".ax-menu button{display:block;width:100%;text-align:left;padding:8px;border:0;background:none;border-radius:8px;cursor:pointer;font-size:14px}.ax-menu button:hover{background:#F4F0E8}" +
+    ".ax-tab{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.ax-tab td{padding:6px 4px;border-top:1px solid #F0ECE3}" +
+    "@media (max-width:767px){.ax-badge{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);right:10px;width:30px;height:30px;font-size:12px}.ax-menu{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}}";
+  function style() { if (document.getElementById("ax-style")) return; var s = document.createElement("style"); s.id = "ax-style"; s.textContent = css; document.head.appendChild(s); }
+  var LOGO = '<svg viewBox="0 0 120 120" width="64" height="64" style="display:block;margin:0 auto"><rect width="120" height="120" rx="26" fill="#1F3D2B"/><circle cx="86" cy="34" r="11" fill="#B98D46"/><path d="M6 96 L40 50 L56 70 L76 44 L114 96 Z" fill="#DCE5DD"/><path d="M42 96V74l14-12 14 12v22z" fill="#C0693E"/></svg>';
+  function ecran(html) {
+    style();
+    var o = document.getElementById("ax-ov");
+    if (!o) { o = document.createElement("div"); o.id = "ax-ov"; o.className = "ax-ov"; (document.body || document.documentElement).appendChild(o); }
+    o.innerHTML = '<div class="ax-box">' + LOGO + '<h1>A.C.T.E.S</h1><div class="ax-sub">CHALET BELLEVUE · GESTION</div>' + html + "</div>";
+    return o;
+  }
+  function fermerEcran() { var o = document.getElementById("ax-ov"); if (o) o.remove(); }
+  function ecranMessage(titre, texte, deco) {
+    var o = ecran('<p style="font-weight:700;text-align:center">' + esc(titre) + '</p><p style="font-size:14px;text-align:center">' + texte + "</p>" + (deco ? '<button class="ax-btn" id="ax-out">Changer de compte</button>' : ""));
+    var b = o.querySelector("#ax-out"); if (b) b.onclick = function () { sb.auth.signOut(); };
+  }
+  function quandPret(f) { if (document.body) f(); else document.addEventListener("DOMContentLoaded", f); }
+  function afficherConnexion() {
+    quandPret(function () {
+      var o = ecran('<form id="ax-f"><label>E-mail</label><input id="ax-e" type="email" autocomplete="username" required><label>Mot de passe</label><input id="ax-p" type="password" autocomplete="current-password" required><button class="ax-btn" id="ax-b">Se connecter</button></form><button class="ax-lien" id="ax-oubli">Mot de passe oublié ?</button><div class="ax-msg" id="ax-m"></div>');
+      var m = o.querySelector("#ax-m");
+      o.querySelector("#ax-f").onsubmit = async function (ev) {
+        ev.preventDefault(); var b = o.querySelector("#ax-b"); b.disabled = true; m.className = "ax-msg"; m.textContent = "Connexion…";
+        var r = await sb.auth.signInWithPassword({ email: o.querySelector("#ax-e").value.trim(), password: o.querySelector("#ax-p").value });
+        b.disabled = false;
+        if (r.error) { m.className = "ax-msg ax-err"; m.textContent = /invalid/i.test(r.error.message) ? "E-mail ou mot de passe incorrect." : r.error.message; }
+      };
+      o.querySelector("#ax-oubli").onclick = async function () {
+        var e = o.querySelector("#ax-e").value.trim();
+        if (!e) { m.className = "ax-msg ax-err"; m.textContent = "Saisis d'abord ton e-mail."; return; }
+        var r = await sb.auth.resetPasswordForEmail(e, { redirectTo: location.origin + location.pathname });
+        m.className = "ax-msg " + (r.error ? "ax-err" : "ax-ok"); m.textContent = r.error ? r.error.message : "Si ce compte existe, un e-mail vient de partir pour choisir un nouveau mot de passe.";
+      };
+    });
+  }
+  function afficherChoixMdp() {
+    quandPret(function () {
+      var o = ecran('<p style="font-size:14px;text-align:center">Bienvenue ! Choisis ton mot de passe pour <b>' + esc(session.user.email) + '</b>.</p><form id="ax-f"><label>Nouveau mot de passe (8 caractères min.)</label><input id="ax-p1" type="password" minlength="8" autocomplete="new-password" required><label>Confirmation</label><input id="ax-p2" type="password" minlength="8" autocomplete="new-password" required><button class="ax-btn" id="ax-b">Enregistrer</button></form><div class="ax-msg" id="ax-m"></div>');
+      var m = o.querySelector("#ax-m");
+      o.querySelector("#ax-f").onsubmit = async function (ev) {
+        ev.preventDefault();
+        var p1 = o.querySelector("#ax-p1").value, p2 = o.querySelector("#ax-p2").value;
+        if (p1 !== p2) { m.className = "ax-msg ax-err"; m.textContent = "Les deux mots de passe sont différents."; return; }
+        var r = await sb.auth.updateUser({ password: p1 });
+        if (r.error) { m.className = "ax-msg ax-err"; m.textContent = r.error.message; return; }
+        window.__actesDoitChoisirMdp = false; URL0 = ""; history.replaceState(null, "", location.pathname); surSession(session, "OK");
+      };
+    });
+  }
+  /* Les modules principaux (clients, devis, factures, réservations…) chargent leurs données à l'ouverture :
+     si quelqu'un d'autre les modifie pendant ce temps, on propose d'actualiser. */
+  var ecoute = false, tAutres = null;
+  function ecouterAutres() {
+    if (ecoute) return; ecoute = true;
+    sb.channel("autres").on("postgres_changes", { event: "*", schema: "public", table: TABLE }, function (p) {
+      var row = p.new && p.new.collection ? p.new : p.old || {};
+      if (!/^(crm_|conciergerie)/.test(row.collection || "")) return;
+      if (p.new && p.new.updated_by && session && p.new.updated_by === session.user.id) return;
+      if (p.eventType === "DELETE" && !p.new) { /* suppression : auteur inconnu, on prévient quand même */ }
+      clearTimeout(tAutres); tAutres = setTimeout(bandeauActualiser, 1500);
+    }).subscribe();
+  }
+  function bandeauActualiser() {
+    if (document.getElementById("ax-maj")) return;
+    var d = document.createElement("div"); d.id = "ax-maj";
+    d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:2147482500;background:#1F3D2B;color:#fff;border-radius:12px;padding:10px 14px;font:14px Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center";
+    d.innerHTML = "<span>Un autre membre a modifié des données.</span><button style='background:#C0693E;color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer'>Actualiser</button><button style='background:none;border:0;color:#fff;cursor:pointer'>✕</button>";
+    var b = d.querySelectorAll("button"); b[0].onclick = function () { location.reload(); }; b[1].onclick = function () { d.remove(); };
+    document.body.appendChild(d);
+  }
+  var ROLES = { admin: "Administrateur", bureau: "Bureau (toute l'appli)", menage: "Ménage / exploitation", lecture: "Lecture seule" };
+  function badgeCompte() {
+    style();
+    if (document.getElementById("ax-badge")) return;
+    var b = document.createElement("button"); b.id = "ax-badge"; b.className = "ax-badge"; b.title = "Mon compte";
+    b.textContent = ((profil && profil.nom) || session.user.email || "?").trim().charAt(0).toUpperCase();
+    b.onclick = function () { var m = document.getElementById("ax-menu"); if (m) { m.remove(); return; } menuCompte(); };
+    document.body.appendChild(b);
+  }
+  function menuCompte() {
+    var m = document.createElement("div"); m.id = "ax-menu"; m.className = "ax-menu";
+    m.innerHTML = '<div style="padding:4px 8px 10px;border-bottom:1px solid #F0ECE3;margin-bottom:6px"><b>' + esc(profil.nom || session.user.email) + '</b><div style="font-size:12px;color:#6E7469">' + esc(session.user.email) + " · " + esc(ROLES[profil.role] || profil.role) + "</div></div>" +
+      (profil.role === "admin" ? '<button id="ax-acc">👥 Gérer les accès</button>' : "") + '<button id="ax-mdp">🔑 Changer mon mot de passe</button><button id="ax-out">↩ Se déconnecter</button>';
+    document.body.appendChild(m);
+    m.querySelector("#ax-out").onclick = function () { sb.auth.signOut(); };
+    m.querySelector("#ax-mdp").onclick = function () { m.remove(); window.__actesDoitChoisirMdp = true; afficherChoixMdp(); };
+    var a = m.querySelector("#ax-acc"); if (a) a.onclick = function () { m.remove(); gererAcces(); };
+  }
+  async function gererAcces() {
+    var o = ecran('<p style="font-weight:700">Accès à l\'application</p><div id="ax-l" style="font-size:13px">Chargement…</div>' +
+      '<p style="font-weight:700;margin-top:16px">Inviter une personne</p><form id="ax-f"><label>E-mail</label><input id="ax-e" type="email" required><label>Nom</label><input id="ax-n"><label>Rôle</label><select id="ax-r">' +
+      Object.keys(ROLES).map(function (k) { return '<option value="' + k + '"' + (k === "bureau" ? " selected" : "") + ">" + ROLES[k] + "</option>"; }).join("") +
+      '</select><button class="ax-btn" id="ax-b">Envoyer l\'invitation</button></form><div class="ax-msg" id="ax-m"></div><button class="ax-lien" id="ax-x">Fermer</button>');
+    o.querySelector(".ax-box").style.maxWidth = "460px"; o.style.overflow = "auto";
+    var m = o.querySelector("#ax-m");
+    async function lister() {
+      var r = await sb.from("acces").select("email,nom,role").order("nom");
+      var l = o.querySelector("#ax-l");
+      if (r.error) { l.textContent = r.error.message; return; }
+      l.innerHTML = '<table class="ax-tab">' + r.data.map(function (x) {
+        return "<tr><td><b>" + esc(x.nom || "") + "</b><br><span style='color:#6E7469'>" + esc(x.email) + "</span></td><td><select data-e='" + esc(x.email) + "' style='padding:6px;font-size:12px'>" + Object.keys(ROLES).map(function (k) { return '<option value="' + k + '"' + (k === x.role ? " selected" : "") + ">" + ROLES[k] + "</option>"; }).join("") + "</select></td><td>" + (x.email === session.user.email.toLowerCase() ? "" : "<button data-del='" + esc(x.email) + "' style='border:0;background:none;color:#C2410C;cursor:pointer'>Retirer</button>") + "</td></tr>";
+      }).join("") + "</table>";
+      l.querySelectorAll("select").forEach(function (s) { s.onchange = async function () { var r = await sb.from("acces").update({ role: s.value }).eq("email", s.dataset.e); m.className = "ax-msg " + (r.error ? "ax-err" : "ax-ok"); m.textContent = r.error ? r.error.message : "Rôle mis à jour."; }; });
+      l.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = async function () { if (!confirm("Retirer l'accès de " + b.dataset.del + " ?")) return; var r = await sb.from("acces").delete().eq("email", b.dataset.del); m.className = "ax-msg " + (r.error ? "ax-err" : "ax-ok"); m.textContent = r.error ? r.error.message : "Accès retiré."; lister(); }; });
+    }
+    lister();
+    o.querySelector("#ax-f").onsubmit = async function (ev) {
+      ev.preventDefault(); m.className = "ax-msg"; m.textContent = "Envoi…";
+      try {
+        await fonction("inviter", { email: o.querySelector("#ax-e").value.trim(), nom: o.querySelector("#ax-n").value.trim(), role: o.querySelector("#ax-r").value, redirectTo: location.origin + location.pathname });
+        m.className = "ax-msg ax-ok"; m.textContent = "Invitation envoyée."; o.querySelector("#ax-f").reset(); lister();
+      } catch (e) { m.className = "ax-msg ax-err"; m.textContent = e.message; }
+    };
+    o.querySelector("#ax-x").onclick = fermerEcran;
+  }
+})();
