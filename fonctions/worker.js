@@ -1724,7 +1724,7 @@ function page(titre, corps, o = {}) {
 <style>${CSS}</style></head><body><header class="top"><div class="in"><span class="dot"></span><a href="${SITE}/">Chalet Bellevue</a></div></header>
 <main>${corps}</main></body></html>`, {
     status: o.status || 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, private", "referrer-policy": "no-referrer", "x-robots-tag": "noindex", "x-frame-options": "DENY" }
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, private", "referrer-policy": "same-origin", "x-robots-tag": "noindex", "x-frame-options": "DENY" }
   });
 }
 var introuvable = () => page("Lien introuvable", `<p class="eyebrow">Chalet Bellevue</p><h1>Ce lien n'est pas (ou plus) valable</h1><p class="sous">V\xE9rifiez l'adresse re\xE7ue par e-mail, ou contactez l'association.</p><a class="btn btn-v" href="${SITE}/contact">Nous contacter</a>`, { status: 404 });
