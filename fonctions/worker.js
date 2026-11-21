@@ -1846,6 +1846,65 @@ function qrSvg(texte, taille) {
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (q.isDark(y, x)) d += `M${x + m} ${y + m}h1v1h-1z`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="${taille}" height="${taille}" shape-rendering="crispEdges"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#1F3D2B"/></svg>`;
 }
+function nettoie(t) {
+  const l = String(t || "").split("\n");
+  return l.filter((x, i) => {
+    if (!/:\s*$/.test(x.trim())) return true;
+    const suite = l.slice(i + 1).find((y) => y.trim());
+    return !!suite && /^[•\-–*☐□]/.test(suite.trim());
+  }).join("\n");
+}
+function bloc(t) {
+  return nettoie(t).trim().split(/\n\s*\n/).filter(Boolean).map((b) => {
+    const lignes = b.split("\n").map((l) => l.trim()).filter(Boolean);
+    let html = "", liste = [], coche = false;
+    const vider = () => {
+      if (liste.length) {
+        html += `<ul class="${coche ? "cases" : "puces"}">` + liste.map((x) => "<li>" + x + "</li>").join("") + "</ul>";
+        liste = [];
+      }
+    };
+    for (const l of lignes) {
+      const m = /^([•\-–*☐□])\s*(.*)$/.exec(l);
+      if (m) {
+        coche = /[☐□]/.test(m[1]);
+        liste.push(telLien(m[2]));
+      } else {
+        vider();
+        html += "<p>" + telLien(l) + "</p>";
+      }
+    }
+    vider();
+    return html;
+  }).join("");
+}
+var ancre = (t, i) => "r" + i + "-" + String(t).toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30);
+function rubriques(d) {
+  const r = [], secs = (d.sections || []).slice();
+  if (secs.length && /^bienvenue/i.test(secs[0].titre)) r.push(secs.shift());
+  if (d.arrivee) r.push({ titre: "Votre arriv\xE9e", texte: `Arriv\xE9e \xE0 partir de ${d.heureArrivee}.` + (d.adresse ? `
+Adresse : ${d.adresse}` : "") + "\n\n" + d.arrivee });
+  secs.forEach((x) => {
+    if (nettoie(x.texte).trim()) r.push(x);
+  });
+  if (!d.sections || !d.sections.length) {
+    if (d.infos) r.push({ titre: "Infos pratiques", texte: d.infos });
+  }
+  if (d.consignes) r.push({ titre: "Avant de partir", texte: `D\xE9part avant ${d.heureDepart}.
+
+` + d.consignes, depart: true });
+  r.push({ titre: "Num\xE9ros utiles", texte: (d.tel && !String(d.numeros || "").replace(/\D/g, "").includes(String(d.tel).replace(/\D/g, "")) ? `${d.asso} : ${d.tel}
+` : "") + (d.numeros ? d.numeros + "\n" : "") + "\nUrgences : 112 \xB7 SAMU : 15 \xB7 Pompiers : 18 \xB7 Gendarmerie : 17" });
+  if (d.reglement) r.push({ titre: "R\xE8glement int\xE9rieur", texte: d.reglement });
+  return r;
+}
+var CSS_LIVRET = `
+.hero{background:var(--vert);color:#fff;border-radius:18px;padding:26px 22px;margin:0 0 16px}.hero h1{color:#fff;margin:4px 0 8px}.hero .eyebrow{color:#E9C98F}.hero p{margin:0;color:#D8E3DA}
+.faits{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 16px}.fait{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px 14px}.fait .k{font-size:12px}.fait .v{font-size:18px;font-family:Fraunces,Georgia,serif;color:var(--vert)}
+.sommaire{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;margin:0 0 6px;scrollbar-width:none}.sommaire a{flex:none;background:#fff;border:1px solid var(--bord);border-radius:999px;padding:7px 13px;font-size:14px;text-decoration:none;color:var(--vert2);white-space:nowrap}
+.carte ul{margin:6px 0 10px;padding-left:20px}.carte li{margin:3px 0}ul.cases{list-style:none;padding-left:2px}ul.cases li:before{content:"\u2610";margin-right:8px;color:var(--terre)}
+.carte p{margin:6px 0}.carte h2{scroll-margin-top:12px}
+`;
 async function routeLivret(request, env, url) {
   const k = url.searchParams.get("k") || "";
   if (!/^[a-f0-9]{24,64}$/.test(k)) return introuvable();
@@ -1853,22 +1912,46 @@ async function routeLivret(request, env, url) {
   if (r.status === 404) return introuvable();
   if (r.status !== 200) return indisponible();
   const d = r.data, lien = SITE + "/livret?k=" + k;
+  const rub = rubriques(d);
   if (url.pathname === "/livret/affiche") {
     return page("Affiche du livret d'accueil", `<style>@page{size:A4;margin:16mm}main{text-align:center}.qr svg{width:min(78vw,330px);height:auto}</style>
 <p class="eyebrow">Bienvenue au ${esc(d.chalet)}</p><h1 style="font-size:40px">Livret d'accueil</h1>
 <p class="sous" style="font-size:19px">Scannez ce code avec l'appareil photo de votre t\xE9l\xE9phone</p>
 <div class="qr">${qrSvg(lien, 330)}</div>
-<p style="font-size:15px;color:#5F6B64;word-break:break-all">${esc(lien)}</p>
 ${d.wifiNom ? `<div class="wifi" style="max-width:420px;margin:24px auto 0;text-align:left"><div class="k">Wi-Fi</div><div class="v">${esc(d.wifiNom)}</div>${d.wifiCle ? `<div class="k" style="margin-top:8px">Mot de passe</div><div class="v">${esc(d.wifiCle)}</div>` : ""}</div>` : ""}
-<p style="margin-top:24px">Infos pratiques \xB7 Wi-Fi \xB7 Consignes de d\xE9part \xB7 Num\xE9ros utiles</p>
+<p style="margin-top:24px">Arriv\xE9e d\xE8s ${esc(d.heureArrivee)} \xB7 D\xE9part avant ${esc(d.heureDepart)} \xB7 ${esc(d.asso)}${d.tel ? " : " + esc(d.tel) : ""}</p>
 <div class="btns" style="justify-content:center"><button class="btn btn-v" onclick="print()">Imprimer</button></div>`);
   }
-  let h = `<p class="eyebrow">Livret d'accueil</p><h1>Bienvenue au ${esc(d.chalet)} !</h1><p class="sous">${esc(d.ville)} \xB7 ${esc(d.asso)}</p>`;
+  if (url.pathname === "/livret/imprimer") {
+    const css = `<style>
+@page{size:A4;margin:14mm 14mm 16mm}
+body{background:#fff}.top{display:none}main{max-width:none;padding:0}
+.couv{min-height:250mm;display:flex;flex-direction:column;justify-content:space-between;border:2px solid var(--vert);border-radius:14px;padding:16mm 14mm;break-after:page;page-break-after:always}
+.couv h1{font-size:44px;margin:6px 0}.couv .grand{font-family:Fraunces,Georgia,serif;font-size:26px;color:var(--vert)}
+.couv .bas{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.encadre{border:1px solid var(--bord);border-radius:12px;padding:12px 16px;background:#FDFBF7}
+.colonnes{column-count:2;column-gap:12mm}.sec{break-inside:avoid;page-break-inside:avoid;margin:0 0 6mm}
+.sec h2{font-size:19px;border-bottom:2px solid var(--ocre);padding-bottom:3px;margin:0 0 6px}.sec p,.sec li{font-size:12.5px;line-height:1.5}.sec ul{margin:4px 0 8px;padding-left:18px}
+ul.cases{list-style:none;padding-left:0;columns:2;column-gap:10mm}ul.cases li{break-inside:avoid;margin:0 0 4px}ul.cases li:before{content:"\u2610";margin-right:7px;color:var(--terre)}
+.fin{break-before:page;page-break-before:always}.fin .sec{margin-bottom:8mm}.fin .sec p,.fin .sec li{font-size:14px}
+.depart{border:2px solid var(--terre);border-radius:12px;padding:10px 14px;background:#FFF8F2}
+.ecran{background:#FFF1C9;color:#7A5200;border-radius:12px;padding:12px 16px;margin:0 0 14px}
+@media print{.ecran{display:none}}
+</style>`;
+    const couv = `<section class="couv"><div><p class="eyebrow">${esc(d.asso)}</p><h1>Bienvenue au ${esc(d.chalet)}</h1><div class="grand">Livret d'accueil</div>
+<p class="sous" style="margin-top:10px">${esc(d.adresse || d.ville)}</p></div>
+<div class="encadre"><b>Arriv\xE9e</b> \xE0 partir de ${esc(d.heureArrivee)} &nbsp;\xB7&nbsp; <b>D\xE9part</b> avant ${esc(d.heureDepart)}${d.wifiNom ? `<br><b>Wi-Fi</b> : ${esc(d.wifiNom)}${d.wifiCle ? ` &nbsp;\xB7&nbsp; <b>Mot de passe</b> : ${esc(d.wifiCle)}` : ""}` : ""}<br><b>Contact</b> : ${esc(d.asso)}${d.tel ? " \u2014 " + esc(d.tel) : ""}${d.email ? " \u2014 " + esc(d.email) : ""}<br><b>Urgences</b> : 112 \xB7 SAMU 15 \xB7 Pompiers 18</div>
+<div class="bas"><div style="max-width:60%"><p style="margin:0 0 4px"><b>Ce livret existe aussi sur votre t\xE9l\xE9phone</b></p><p class="k" style="margin:0">Scannez le code pour l'avoir toujours sur vous, avec les liens et num\xE9ros cliquables.</p></div>${qrSvg(lien, 120)}</div></section>`;
+    const pleine = (x) => x.depart || x.titre === "Num\xE9ros utiles";
+    const sec = (x) => `<section class="sec${x.depart ? " depart" : ""}"><h2>${esc(x.titre)}</h2>${bloc(x.texte)}</section>`;
+    const corps = `<div class="colonnes">${rub.filter((x) => !pleine(x)).map(sec).join("")}</div><div class="fin">${rub.filter(pleine).map(sec).join("")}</div>`;
+    return page("Livret d'accueil \xE0 imprimer", css + `<div class="ecran">Version \xE0 imprimer (A4). Utilisez \xAB Imprimer \xBB puis \xAB Enregistrer en PDF \xBB ou votre imprimante. <button class="btn btn-v" style="padding:6px 14px;font-size:14px;margin-left:8px" onclick="print()">Imprimer</button></div>` + couv + corps + `<p class="pied">Tr\xE8s bon s\xE9jour ! \u2014 ${esc(d.asso)}</p>`);
+  }
+  let h = `<style>${CSS_LIVRET}</style><div class="hero"><p class="eyebrow">Livret d'accueil</p><h1>Bienvenue au ${esc(d.chalet)} !</h1><p>${esc(d.adresse || d.ville)}</p></div>
+<div class="faits"><div class="fait"><div class="k">Arriv\xE9e</div><div class="v">d\xE8s ${esc(d.heureArrivee)}</div></div><div class="fait"><div class="k">D\xE9part</div><div class="v">avant ${esc(d.heureDepart)}</div></div>${d.tel ? `<div class="fait"><div class="k">${esc(d.asso)}</div><div class="v">${telLien(d.tel)}</div></div>` : ""}</div>`;
   if (d.wifiNom) h += `<div class="wifi"><div class="k">Wi-Fi</div><div class="v">${esc(d.wifiNom)}</div>${d.wifiCle ? `<div class="k" style="margin-top:8px">Mot de passe</div><div class="v" id="cle">${esc(d.wifiCle)}</div><div class="btns"><button class="btn btn-p" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('cle').textContent).then(function(){this.textContent='Copi\xE9 \u2713'}.bind(this))">Copier le mot de passe</button></div>` : ""}</div>`;
-  if (d.infos) h += `<section class="carte"><h2>Infos pratiques</h2>${paras(d.infos)}</section>`;
-  if (d.consignes) h += `<section class="carte"><h2>Avant de partir</h2>${paras(d.consignes)}</section>`;
-  if (d.numeros || d.tel) h += `<section class="carte"><h2>Num\xE9ros utiles</h2>${d.tel ? `<p><b>${esc(d.asso)}</b> : ${telLien(d.tel)}</p>` : ""}${d.numeros ? "<p>" + telLien(d.numeros).replace(/\n/g, "<br>") + "</p>" : ""}<p class="k">Urgences : <a href="tel:112">112</a> \xB7 Samu <a href="tel:15">15</a> \xB7 Pompiers <a href="tel:18">18</a></p></section>`;
-  if (d.reglement) h += `<section class="carte"><h2>R\xE8glement int\xE9rieur</h2>${paras(d.reglement)}</section>`;
+  h += `<nav class="sommaire">${rub.map((x, i) => `<a href="#${ancre(x.titre, i)}">${esc(x.titre)}</a>`).join("")}</nav>`;
+  h += rub.map((x, i) => `<section class="carte" id="${ancre(x.titre, i)}"><h2>${esc(x.titre)}</h2>${bloc(x.texte)}</section>`).join("");
   if (d.lienAvis && /^https:\/\//.test(d.lienAvis)) h += `<section class="carte"><h2>Votre avis compte</h2><p>Un petit mot apr\xE8s votre s\xE9jour aide beaucoup l'association.</p><a class="btn btn-v" href="${esc(d.lienAvis)}" rel="noopener">Laisser un avis</a></section>`;
   h += `<p class="pied">Tr\xE8s bon s\xE9jour ! \u2014 ${esc(d.asso)}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
   return page("Livret d'accueil", h);
@@ -2051,7 +2134,7 @@ var worker_default = {
     const url = new URL(request.url);
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
     if (url.pathname.startsWith("/sejour/")) return routeSejour(request, env, url);
-    if (url.pathname === "/livret" || url.pathname === "/livret/affiche") return routeLivret(request, env, url);
+    if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
     if (url.pathname === "/api/availability" && request.method === "GET") {
       const [orig, soft] = await Promise.all([env.API.fetch(request), logiciel(env)]);
       if (!soft || !orig.ok) return orig;
