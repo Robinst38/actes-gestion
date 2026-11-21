@@ -1718,6 +1718,7 @@ input[type=text]{width:100%;font:inherit;padding:11px 12px;border:1px solid var(
 function page(titre, corps, o = {}) {
   return new Response(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>${esc(titre)} \u2014 Chalet Bellevue</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>${CSS}</style></head><body><header class="top"><div class="in"><span class="dot"></span><a href="${SITE}/">Chalet Bellevue</a></div></header>
@@ -2162,7 +2163,12 @@ function accesEntete(page2, url) {
   const L = LIBELLES[/^\/en(\/|$)/.test(url.pathname) ? "en" : /^\/es(\/|$)/.test(url.pathname) ? "es" : "fr"];
   return new HTMLRewriter().on("head", { element(el) {
     el.append(CSS_ACCES, { html: true });
-  } }).on("a.nav-account", {
+  } }).on('link[rel*="icon"]', {
+    element(el) {
+      const h = el.getAttribute("href") || "";
+      if (h && !/^(\/|https?:|data:)/i.test(h)) el.setAttribute("href", "/" + h.replace(/^(\.\.?\/)+/, ""));
+    }
+  }).on("a.nav-account", {
     element(el) {
       el.setAttribute("href", "/sejour");
       el.removeAttribute("data-route");
@@ -2181,7 +2187,7 @@ function accesEntete(page2, url) {
     }
   }).transform(page2);
 }
-var LIBRES = [/^\/api\//, /^\/sejour(\/|$)/, /^\/livret(\/|$)/, /^\/favicon/, /^\/robots\.txt$/];
+var LIBRES = [/^\/api\//, /^\/sejour(\/|$)/, /^\/livret(\/|$)/, /^\/favicon/, /^\/apple-touch-icon/, /^\/robots\.txt$/];
 var COOKIE = "cb_apercu";
 async function empreinteCode(code, env) {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("apercu|" + code + "|" + (env.SITE_SECRET || "")));
@@ -2211,6 +2217,7 @@ function pageMaintenance(erreurCode, retour, contact) {
   const mail = /^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/i.test(contact || "") ? contact : "";
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>Chalet Bellevue \u2014 site en pr\xE9paration</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -2422,6 +2429,10 @@ async function synchroniser(env) {
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/favicon.ico") {
+      const r = await fetch(new Request(url.origin + "/apple-touch-icon.png"));
+      if (r.ok) return new Response(r.body, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+    }
     const ferme = await filtreMaintenance(request, env, ctx, url);
     if (ferme) return ferme;
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
