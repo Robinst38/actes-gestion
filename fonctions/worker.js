@@ -2077,32 +2077,54 @@ function lireCookie(request, nom) {
   const m = (request.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + nom + "=([a-f0-9]+)"));
   return m ? m[1] : "";
 }
+var EMAIL_CONTACT = "contact@chalet-bellevue.fr";
+var LOGO_SVG = `<svg viewBox="0 0 200 200" width="44" height="44" aria-hidden="true"><circle cx="146" cy="54" fill="#b98d46" r="12"/><polygon fill="#faf6ef" opacity="0.35" points="12,152 64,72 108,152"/><polygon fill="#faf6ef" opacity="0.22" points="96,152 138,88 178,152"/><rect fill="#faf6ef" height="5" opacity="0.18" rx="2.5" width="124" x="38" y="181"/><polygon fill="#faf6ef" points="53,152 100,83 147,152"/><polygon fill="#1f3d2b" opacity="0.92" points="86,109 100,89 114,109 107,109 100,98 93,109"/><rect fill="#1f3d2b" height="34" stroke="#faf6ef" stroke-width="3" width="48" x="76" y="152"/><rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="81" y="160"/><rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="109" y="160"/><path d="M92,186 V168 a8,8 0 0 1 16,0 v18 z" fill="#c0693e"/></svg>`;
 function pageMaintenance(erreurCode, retour) {
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>Chalet Bellevue \u2014 site en pr\xE9paration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
-font-family:Georgia,"Times New Roman",serif;color:#2b2b2b;background:linear-gradient(160deg,#eef3ee 0%,#dfe8e1 100%)}
-.carte{max-width:460px;width:100%;background:#fff;border-radius:18px;padding:40px 32px;box-shadow:0 10px 40px rgba(30,60,40,.12);text-align:center}
-.mont{font-size:44px;line-height:1}h1{font-size:26px;margin:14px 0 6px;font-weight:normal}
-p{font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.6;color:#555;margin:8px 0}
-form{margin-top:26px;padding-top:20px;border-top:1px solid #eee}
-label{display:block;font-family:system-ui,sans-serif;font-size:13px;color:#777;margin-bottom:8px}
-.ligne{display:flex;gap:8px}input{flex:1;min-width:0;font-size:16px;padding:11px 12px;border:1px solid #cdd8cf;border-radius:10px}
-button{font-size:15px;padding:11px 16px;border:0;border-radius:10px;background:#2f5d45;color:#fff;cursor:pointer}
-.err{color:#b91c1c;font-size:13px;margin-top:10px}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:#faf6ef;color:#2a2f2b;
+font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.carte{max-width:480px;width:100%;background:#fff;border:1px solid #ebe3d4;border-radius:20px;padding:40px 32px 28px;box-shadow:0 18px 50px rgba(31,61,43,.10);text-align:center}
+.marque{display:inline-flex;align-items:center;gap:12px;text-decoration:none;color:#1f3d2b}
+.logo{width:64px;height:64px;border-radius:16px;background:#1f3d2b;display:flex;align-items:center;justify-content:center}
+.nom{font-family:Fraunces,Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.01em}
+.sur{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#b98d46;margin:22px 0 6px;font-weight:600}
+h1{font-family:Fraunces,Georgia,serif;font-weight:500;font-size:30px;line-height:1.15;margin:0 0 12px;color:#1f3d2b}
+p{font-size:15px;line-height:1.6;color:#5b625c;margin:0 0 8px}
+.contact{margin:22px 0 6px;padding:18px;border-radius:14px;background:#f4efe5}
+.contact p{margin:0 0 10px;font-size:14px}
+.mail{display:inline-block;padding:11px 18px;border-radius:999px;background:#1f3d2b;color:#fff;text-decoration:none;font-weight:600;font-size:15px;word-break:break-all}
+.mail:hover{background:#2c5440}
+details{margin-top:22px;font-size:13px;color:#8a8f84}
+summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}
+summary:hover{color:#1f3d2b}
+form{margin-top:12px}
+.ligne{display:flex;gap:8px}input{flex:1;min-width:0;font-size:16px;padding:10px 12px;border:1px solid #d9d0bf;border-radius:10px;font-family:inherit}
+button{font-size:14px;padding:10px 14px;border:0;border-radius:10px;background:#c0693e;color:#fff;cursor:pointer;font-weight:600;font-family:inherit}
+.err{color:#b91c1c;font-size:13px;margin-top:8px}
+.pied{margin-top:18px;font-size:12px;color:#9a9f94}
 </style></head><body><main class="carte">
-<div class="mont">\u26F0\uFE0F</div><h1>Chalet Bellevue</h1>
-<p>Notre site fait peau neuve et sera bient\xF4t de retour.</p>
-<p>Pour toute demande : association A.C.T.E.S, Bagn\xE8res-de-Luchon.</p>
-<form method="post" action="/__apercu"><label for="c">Acc\xE8s r\xE9serv\xE9</label>
-<input type="hidden" name="retour" value="${esc2(retour)}">
-<div class="ligne"><input id="c" name="code" type="password" autocomplete="current-password" required placeholder="Code d'acc\xE8s"><button>Entrer</button></div>
-${erreurCode ? '<p class="err">Code incorrect.</p>' : ""}</form></main></body></html>`;
+<div class="marque"><span class="logo">${LOGO_SVG}</span><span class="nom">Chalet Bellevue</span></div>
+<div class="sur">Bagn\xE8res-de-Luchon \xB7 Pyr\xE9n\xE9es</div>
+<h1>Notre site fait peau neuve</h1>
+<p>Il sera de retour tr\xE8s bient\xF4t. Merci de votre patience !</p>
+<div class="contact"><p>Une question, une demande de r\xE9servation ?<br>\xC9crivez-nous, nous vous r\xE9pondons rapidement :</p>
+<a class="mail" href="mailto:${EMAIL_CONTACT}?subject=${encodeURIComponent("Demande d'information \u2014 Chalet Bellevue")}">${EMAIL_CONTACT}</a></div>
+<details${erreurCode ? " open" : ""}><summary>Acc\xE8s r\xE9serv\xE9</summary>
+<form method="post" action="/__apercu"><input type="hidden" name="retour" value="${esc2(retour)}">
+<div class="ligne"><input name="code" type="password" autocomplete="current-password" required placeholder="Code d'acc\xE8s" aria-label="Code d'acc\xE8s"><button>Entrer</button></div>
+${erreurCode ? '<p class="err">Code incorrect.</p>' : ""}</form></details>
+<div class="pied">Association A.C.T.E.S \u2014 Chalet Bellevue</div>
+</main></body></html>`;
   return new Response(html, { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "86400", "x-robots-tag": "noindex, nofollow" } });
 }
 async function filtreMaintenance(request, env, ctx, url) {
-  if (LIBRES.some((r) => r.test(url.pathname))) return null;
+  const resa = url.pathname === "/api/reservations" && request.method === "POST";
+  if (!resa && LIBRES.some((r) => r.test(url.pathname))) return null;
   const etat = await etatMaintenance(env, ctx);
   if (!etat.actif) return null;
   if (url.pathname === "/__apercu" && request.method === "POST") {
@@ -2121,6 +2143,7 @@ async function filtreMaintenance(request, env, ctx, url) {
     return pageMaintenance(true, retour);
   }
   if (etat.jeton && lireCookie(request, COOKIE) === etat.jeton) return null;
+  if (resa) return new Response(JSON.stringify({ error: "Le site est en maintenance : \xE9crivez-nous \xE0 " + EMAIL_CONTACT + "." }), { status: 503, headers: { "content-type": "application/json; charset=utf-8" } });
   if (url.pathname === "/robots.txt") return null;
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Site en maintenance.", { status: 503 });
   return pageMaintenance(false, url.pathname + url.search);
