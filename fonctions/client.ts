@@ -108,8 +108,10 @@ function propre(t: unknown) { return String(t || "").split("\n").filter((l) => !
 const CONDITIONS_DEFAUT = "1. Objet — Le présent contrat porte sur la location du chalet désigné ci-dessus, pour la période et le nombre de personnes indiqués. Le nombre d'occupants ne peut dépasser la capacité d'accueil.\n2. Prix — Le prix comprend la mise à disposition des locaux et du mobilier. La taxe de séjour est due en sus pour les personnes majeures.\n3. Réservation — La réservation devient ferme à réception du contrat signé et de l'acompte indiqué.\n4. Solde — Le solde est à régler au plus tard à la date indiquée dans l'échéancier.\n5. Caution — Une caution est remise à l'arrivée. Elle est restituée après l'état des lieux de sortie, déduction faite des éventuelles dégradations ou manquants constatés.\n6. Annulation — En cas d'annulation par le locataire, l'acompte reste acquis à l'association. [Conditions à préciser par le bureau.]\n7. Obligations du locataire — Le locataire s'engage à respecter le règlement intérieur, à occuper les lieux paisiblement et à les rendre en bon état de propreté.\n8. Assurance — Le locataire doit être couvert par une assurance responsabilité civile pour la durée du séjour.\n9. Animaux — Les animaux sont acceptés uniquement s'ils ont été déclarés à la réservation.\n10. État des lieux — Un état des lieux et un inventaire sont établis à l'arrivée et au départ.";
 const REGLEMENT_DEFAUT = "• Respecter le calme entre 22 h et 8 h, par égard pour le voisinage.\n• Il est interdit de fumer à l'intérieur du chalet.\n• Respecter les consignes de sécurité incendie affichées ; ne jamais bloquer les issues de secours.\n• Trier les déchets selon les consignes affichées.\n• Signaler sans tarder toute casse ou panne au responsable de l'association.\n• Rendre le chalet rangé, la vaisselle propre et les poubelles vidées.\n• Les animaux déclarés ne sont pas admis dans les chambres ni sur la literie.";
 
+const CHAMBRES_DEFAUT = [1, 2, 3, 4, 5, 6].map((i) => ({ id: "ch" + i, nom: "Chambre " + i, lits: i === 6 ? 3 : 4 }));
+const ACTIVITES_DEFAUT = "Thermes de Luchon (espace bien-être)\nTélécabine vers Superbagnères\nRandonnée au lac d'Oô\nVallée du Lys et cascade d'Enfer\nBalade dans les allées d'Étigny\nMarché de Luchon\nSki ou luge à Superbagnères (en saison)\nParapente depuis Superbagnères\nVélo ou VTT dans la vallée\nSoirée jeux au chalet";
 function config(c: any) {
-  const o = { nomChalet: "Chalet Bellevue", ville: "Bagnères-de-Luchon", acomptePct: 30, soldeJours: 30, caution: "", infosPratiques: "", lienAvis: "", telAsso: "", conditions: CONDITIONS_DEFAUT, reglement: REGLEMENT_DEFAUT, adhesionSejour: "", acompteArrondi: false, livretToken: "", wifiNom: "", wifiCle: "", heureArrivee: "16 h", heureDepart: "10 h", adresseChalet: "", consignesArrivee: "", consignesDepart: "", numerosUtiles: "", livretSections: [], ...(c || {}) };
+  const o = { nomChalet: "Chalet Bellevue", ville: "Bagnères-de-Luchon", acomptePct: 30, soldeJours: 30, caution: "", infosPratiques: "", lienAvis: "", telAsso: "", conditions: CONDITIONS_DEFAUT, reglement: REGLEMENT_DEFAUT, adhesionSejour: "", acompteArrondi: false, livretToken: "", wifiNom: "", wifiCle: "", heureArrivee: "16 h", heureDepart: "10 h", adresseChalet: "", consignesArrivee: "", consignesDepart: "", numerosUtiles: "", livretSections: [], chambres: CHAMBRES_DEFAUT, activitesSuggerees: ACTIVITES_DEFAUT, ...(c || {}) };
   o.modeles = { ...MODELES, ...((c && c.modeles) || {}) };
   o.autoEmails = { confirmation: false, j7: false, j1: false, avis: false, relances: false, recap: false, menage: false, ...((c && c.autoEmails) || {}) };
   return o;
@@ -388,6 +390,11 @@ Deno.serve(async (req) => {
       caution: num((r.caution || {}).montant) || num(cfg.caution),
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
       paiementEnLigne: helloassoConfigure(),
+      // Organisation du séjour, remplie par le groupe : répartition des chambres, liste de choses à faire, activités
+      chambres: (cfg.chambres || []).map((c: any) => ({ id: String(c.id), nom: String(c.nom || ""), lits: Math.max(0, Math.min(20, num(c.lits))) })),
+      couchage: r.couchage || {},
+      programme: r.programme || { taches: [], activites: [] },
+      suggestions: String(cfg.activitesSuggerees || "").split("\n").map((x) => x.replace(/^[•\-–*]\s*/, "").trim()).filter(Boolean).slice(0, 30),
     });
   }
 
@@ -397,6 +404,22 @@ Deno.serve(async (req) => {
     const r = await trouver(sb, b.jeton || "");
     if (!r) return erreur("Séjour introuvable.", 404);
     if (r.statut === "annulee") return erreur("Cette réservation est annulée.", 409);
+
+    if (b.action === "espace") {
+      const txt = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
+      const couchage: Record<string, string[]> = {};
+      for (const c of cfg.chambres || []) {
+        const l = ((b.couchage || {})[c.id] || []) as unknown[];
+        couchage[String(c.id)] = Array.from({ length: Math.max(0, Math.min(20, num(c.lits))) }, (_, i) => txt(l[i], 60));
+      }
+      const liste = (v: unknown, jour: boolean) => (Array.isArray(v) ? v : []).slice(0, 80).map((x: any) => ({
+        id: txt(x && x.id, 20) || Math.random().toString(36).slice(2, 10), t: txt(x && x.t, 160), fait: !!(x && x.fait),
+        ...(jour ? { jour: /^\d{4}-\d{2}-\d{2}$/.test(String(x && x.jour)) ? String(x.jour) : "" } : {}),
+      })).filter((x: any) => x.t);
+      const programme = { taches: liste((b.programme || {}).taches, false), activites: liste((b.programme || {}).activites, true) };
+      await fusionDoc(sb, "crm_actes_resas", r.id, { couchage, programme, espaceMajLe: new Date().toISOString() });
+      return json({ ok: true });
+    }
 
     if (b.action === "accepter") {
       if (r.contratAccepte) return json({ ok: true, deja: true });

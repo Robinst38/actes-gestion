@@ -1,5 +1,4 @@
 /*! Chalet Bellevue — relais site ↔ logiciel (sources : site-relais/). Contient qrcode-generator 1.4.4, (c) 2009 Kazuhiko Arase, licence MIT. */
-
 // qrcode.mjs
 var qrcode = function() {
   var qrcode2 = function(typeNumber, errorCorrectionLevel) {
@@ -1750,6 +1749,71 @@ function memeOrigine(request) {
   return !o || o === SITE || o === "https://chalet-bellevue.fr";
 }
 var redirige = (u) => new Response(null, { status: 303, headers: { location: u, "cache-control": "no-store" } });
+function joursSejour(debut, fin) {
+  const out = [];
+  for (let d = debut; d && fin && d <= fin && out.length < 60; d = new Date(Date.parse(d + "T12:00:00Z") + 864e5).toISOString().slice(0, 10)) out.push(d);
+  return out;
+}
+function sectionOrganisation(d, base) {
+  const donnees = {
+    chambres: d.chambres,
+    couchage: d.couchage || {},
+    programme: d.programme || { taches: [], activites: [] },
+    suggestions: d.suggestions || [],
+    jours: joursSejour(d.debut, d.fin).map((j) => [j, (/* @__PURE__ */ new Date(j + "T12:00:00Z")).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })]),
+    url: base + "/espace",
+    personnes: d.personnes
+  };
+  return `<section class="carte" id="organisation"><h2>Organisation du s\xE9jour</h2>
+<p class="k" style="margin:-4px 0 14px">\xC0 remplir ensemble : tout est enregistr\xE9 automatiquement et partag\xE9 avec toutes les personnes qui ont ce lien. <span id="org-etat"></span></p>
+<h3 class="org-t">\u{1F6CF}\uFE0F Qui dort o\xF9 ?</h3><p class="k" id="org-places"></p><div class="org-ch" id="org-ch"></div>
+<h3 class="org-t">\u2705 \xC0 faire avant et pendant le s\xE9jour</h3><div id="org-taches"></div>
+<form class="org-aj" data-l="taches"><input type="text" maxlength="160" placeholder="Ex. : courses du premier soir, apporter les draps\u2026"><button class="btn btn-v" type="submit">Ajouter</button></form>
+<h3 class="org-t">\u{1F97E} Nos activit\xE9s</h3><div id="org-act"></div>
+<form class="org-aj" data-l="activites"><input type="text" maxlength="160" placeholder="Une activit\xE9, une sortie, un repas\u2026"><button class="btn btn-v" type="submit">Ajouter</button></form>
+<div class="org-sug" id="org-sug"></div></section>
+<style>${CSS_ORGA}</style>
+<script type="application/json" id="org-donnees">${JSON.stringify(donnees).replace(/</g, "\\u003c")}</script>
+<script>${JS_ORGA}</script>`;
+}
+var CSS_ORGA = `
+.org-t{font-family:Fraunces,Georgia,serif;color:var(--vert);font-size:18px;margin:22px 0 8px}
+.org-ch{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.org-c{border:1px solid var(--bord);border-radius:12px;padding:12px;background:#FDFBF7}.org-c b{display:block;margin-bottom:6px;color:var(--vert)}
+.org-c input{width:100%;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--bord);border-radius:8px;margin:3px 0;background:#fff}
+.org-li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F0EADF}
+.org-li input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#1F3D2B}
+.org-li .t{flex:1;min-width:0;word-break:break-word}.org-li.fait .t{text-decoration:line-through;color:var(--gris)}
+.org-li select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--bord);border-radius:8px;background:#fff;max-width:140px}
+.org-x{border:0;background:none;color:#A33E22;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
+.org-aj{display:flex;gap:8px;margin-top:10px}.org-aj input{flex:1;min-width:0}.org-aj .btn{padding:10px 16px;font-size:15px}
+.org-sug{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.org-sug button{border:1px dashed var(--ocre);background:#fff;color:var(--vert2);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.org-vide{color:var(--gris);font-size:14px;margin:4px 0}
+@media print{.org-aj,.org-sug,.org-x{display:none}}
+`;
+var JS_ORGA = `(function(){
+var D=JSON.parse(document.getElementById("org-donnees").textContent);
+var C=D.couchage||{},P={taches:(D.programme.taches||[]).slice(),activites:(D.programme.activites||[]).slice()};
+var etat=document.getElementById("org-etat"),minu=null;
+function e(t){return String(t).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function id(){return Math.random().toString(36).slice(2,10)}
+function sauver(){etat.textContent="Enregistrement\u2026";clearTimeout(minu);minu=setTimeout(function(){fetch(D.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({couchage:C,programme:P})}).then(function(r){etat.textContent=r.ok?"\u2713 Enregistr\xE9":"\u26A0 Non enregistr\xE9, r\xE9essayez"}).catch(function(){etat.textContent="\u26A0 Pas de connexion, r\xE9essayez"})},700)}
+function places(){var n=0,l=0;D.chambres.forEach(function(ch){l+=ch.lits;(C[ch.id]||[]).forEach(function(x){if(x&&x.trim())n++})});document.getElementById("org-places").textContent=n+" personne"+(n>1?"s":"")+" plac\xE9e"+(n>1?"s":"")+" sur "+D.personnes+" \xB7 "+l+" lits"}
+var ch=document.getElementById("org-ch");
+D.chambres.forEach(function(c){var d=document.createElement("div");d.className="org-c";var h="<b>"+e(c.nom)+" \xB7 "+c.lits+" lit"+(c.lits>1?"s":"")+"</b>";for(var i=0;i<c.lits;i++)h+='<input type="text" maxlength="60" data-c="'+e(c.id)+'" data-i="'+i+'" placeholder="Lit '+(i+1)+' : pr\xE9nom" value="'+e((C[c.id]||[])[i]||"")+'">';d.innerHTML=h;ch.appendChild(d)});
+ch.addEventListener("input",function(ev){var t=ev.target;if(!t.dataset.c)return;var a=(C[t.dataset.c]||[]).slice();a[+t.dataset.i]=t.value;C[t.dataset.c]=a;places();sauver()});
+function liste(cle,el,jour){var b=document.getElementById(el);if(!P[cle].length){b.innerHTML='<p class="org-vide">Rien pour l\u2019instant.</p>';return}
+b.innerHTML=P[cle].map(function(x,i){var s="";if(jour){s='<select data-k="'+cle+'" data-j="'+i+'"><option value="">Jour ?</option>'+D.jours.map(function(j){return'<option value="'+j[0]+'"'+(x.jour===j[0]?" selected":"")+">"+e(j[1])+"</option>"}).join("")+"</select>"}
+return'<div class="org-li'+(x.fait?" fait":"")+'"><input type="checkbox" data-k="'+cle+'" data-f="'+i+'"'+(x.fait?" checked":"")+' aria-label="Fait"><span class="t">'+e(x.t)+"</span>"+s+'<button class="org-x" data-k="'+cle+'" data-x="'+i+'" title="Supprimer" aria-label="Supprimer">\xD7</button></div>'}).join("")}
+function tout(){liste("taches","org-taches",false);liste("activites","org-act",true);var deja={};P.activites.forEach(function(a){deja[a.t.toLowerCase()]=1});document.getElementById("org-sug").innerHTML=D.suggestions.filter(function(s){return!deja[s.toLowerCase()]}).map(function(s){return'<button type="button" data-s="'+e(s)+'">+ '+e(s)+"</button>"}).join("")}
+document.getElementById("organisation").addEventListener("click",function(ev){var t=ev.target;
+if(t.dataset.x!=null){P[t.dataset.k].splice(+t.dataset.x,1);tout();sauver()}
+else if(t.dataset.f!=null){P[t.dataset.k][+t.dataset.f].fait=t.checked;tout();sauver()}
+else if(t.dataset.s!=null){P.activites.push({id:id(),t:t.dataset.s,jour:"",fait:false});tout();sauver()}});
+document.getElementById("organisation").addEventListener("change",function(ev){var t=ev.target;if(t.dataset.j!=null){P[t.dataset.k][+t.dataset.j].jour=t.value;sauver()}});
+Array.prototype.forEach.call(document.querySelectorAll(".org-aj"),function(f){f.addEventListener("submit",function(ev){ev.preventDefault();var i=f.querySelector("input"),v=i.value.trim();if(!v)return;P[f.dataset.l].push(f.dataset.l==="activites"?{id:id(),t:v,jour:"",fait:false}:{id:id(),t:v,fait:false});i.value="";tout();sauver()})});
+places();tout();
+})();`;
 var ETAT = { paye: ["R\xE9gl\xE9", "b-ok"], avenir: ["\xC0 r\xE9gler", "b-av"], retard: ["En retard", "b-re"] };
 function vueSejour(d, jeton, msg) {
   const base = "/sejour/" + jeton;
@@ -1797,13 +1861,21 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
     }
     h += `</section>`;
   }
+  if (d.statut !== "demande" && Array.isArray(d.chambres)) h += sectionOrganisation(d, base);
   h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
   return h;
 }
 async function routeSejour(request, env, url) {
-  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer))?\/?$/.exec(url.pathname);
+  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
   const jeton = m[1], action = m[3];
+  if (request.method === "POST" && action === "espace") {
+    if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
+    const b = await request.json().catch(() => null);
+    if (!b) return new Response(JSON.stringify({ error: "Demande incompl\xE8te." }), { status: 400, headers: { "content-type": "application/json" } });
+    const r2 = await appel(env, "POST", null, { action: "espace", jeton, couchage: b.couchage, programme: b.programme });
+    return new Response(JSON.stringify(r2.data || {}), { status: r2.status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  }
   if (request.method === "POST") {
     if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
     const f = await request.formData().catch(() => null);
@@ -2077,9 +2149,9 @@ function lireCookie(request, nom) {
   const m = (request.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + nom + "=([a-f0-9]+)"));
   return m ? m[1] : "";
 }
-var EMAIL_CONTACT = "contact@chalet-bellevue.fr";
 var LOGO_SVG = `<svg viewBox="0 0 200 200" width="44" height="44" aria-hidden="true"><circle cx="146" cy="54" fill="#b98d46" r="12"/><polygon fill="#faf6ef" opacity="0.35" points="12,152 64,72 108,152"/><polygon fill="#faf6ef" opacity="0.22" points="96,152 138,88 178,152"/><rect fill="#faf6ef" height="5" opacity="0.18" rx="2.5" width="124" x="38" y="181"/><polygon fill="#faf6ef" points="53,152 100,83 147,152"/><polygon fill="#1f3d2b" opacity="0.92" points="86,109 100,89 114,109 107,109 100,98 93,109"/><rect fill="#1f3d2b" height="34" stroke="#faf6ef" stroke-width="3" width="48" x="76" y="152"/><rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="81" y="160"/><rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="109" y="160"/><path d="M92,186 V168 a8,8 0 0 1 16,0 v18 z" fill="#c0693e"/></svg>`;
-function pageMaintenance(erreurCode, retour) {
+function pageMaintenance(erreurCode, retour, contact) {
+  const mail = /^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/i.test(contact || "") ? contact : "";
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>Chalet Bellevue \u2014 site en pr\xE9paration</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2112,8 +2184,8 @@ button{font-size:14px;padding:10px 14px;border:0;border-radius:10px;background:#
 <div class="sur">Bagn\xE8res-de-Luchon \xB7 Pyr\xE9n\xE9es</div>
 <h1>Notre site fait peau neuve</h1>
 <p>Il sera de retour tr\xE8s bient\xF4t. Merci de votre patience !</p>
-<div class="contact"><p>Une question, une demande de r\xE9servation ?<br>\xC9crivez-nous, nous vous r\xE9pondons rapidement :</p>
-<a class="mail" href="mailto:${EMAIL_CONTACT}?subject=${encodeURIComponent("Demande d'information \u2014 Chalet Bellevue")}">${EMAIL_CONTACT}</a></div>
+${mail ? `<div class="contact"><p>Une question, une demande de r\xE9servation ?<br>\xC9crivez-nous, nous vous r\xE9pondons rapidement :</p>
+<a class="mail" href="mailto:${esc2(mail)}?subject=${encodeURIComponent("Demande d'information \u2014 Chalet Bellevue")}">${esc2(mail)}</a></div>` : ""}
 <details${erreurCode ? " open" : ""}><summary>Acc\xE8s r\xE9serv\xE9</summary>
 <form method="post" action="/__apercu"><input type="hidden" name="retour" value="${esc2(retour)}">
 <div class="ligne"><input name="code" type="password" autocomplete="current-password" required placeholder="Code d'acc\xE8s" aria-label="Code d'acc\xE8s"><button>Entrer</button></div>
@@ -2140,13 +2212,13 @@ async function filtreMaintenance(request, env, ctx, url) {
       } });
     }
     await new Promise((r) => setTimeout(r, 800));
-    return pageMaintenance(true, retour);
+    return pageMaintenance(true, retour, etat.contact);
   }
   if (etat.jeton && lireCookie(request, COOKIE) === etat.jeton) return null;
-  if (resa) return new Response(JSON.stringify({ error: "Le site est en maintenance : \xE9crivez-nous \xE0 " + EMAIL_CONTACT + "." }), { status: 503, headers: { "content-type": "application/json; charset=utf-8" } });
+  if (resa) return new Response(JSON.stringify({ error: "Le site est en maintenance : merci de nous \xE9crire" + (etat.contact ? " \xE0 " + etat.contact : "") + "." }), { status: 503, headers: { "content-type": "application/json; charset=utf-8" } });
   if (url.pathname === "/robots.txt") return null;
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Site en maintenance.", { status: 503 });
-  return pageMaintenance(false, url.pathname + url.search);
+  return pageMaintenance(false, url.pathname + url.search, etat.contact);
 }
 var cleDate = (v) => JSON.stringify([v.type === "no_checkin" ? "no_checkin" : "blocked", String(v.reason || "")]);
 async function synchroBlocages(env, soft, DB) {
@@ -2275,7 +2347,7 @@ async function synchroniser(env) {
   }
   if (soft.maintenance) {
     const m = soft.maintenance;
-    const val = JSON.stringify({ actif: !!m.actif, jeton: m.code && m.code.length >= 4 ? await empreinteCode(m.code, env) : "" });
+    const val = JSON.stringify({ actif: !!m.actif, jeton: m.code && m.code.length >= 4 ? await empreinteCode(m.code, env) : "", contact: String(m.contact || "").slice(0, 120) });
     const actuel = await DB.prepare("SELECT value FROM site_content WHERE key = 'relais_maintenance'").first();
     if (!actuel || actuel.value !== val) {
       await DB.prepare("INSERT INTO site_content (key, value, updated_at) VALUES ('relais_maintenance', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(val, maintenant).run();
