@@ -2204,7 +2204,21 @@ async function synchroniser(env) {
       bilan.infos = true;
     }
   }
-  if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos) console.log("synchro", JSON.stringify(bilan));
+  try {
+    const hier = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    const dates = (await DB.prepare("SELECT date, type, reason FROM blocked_dates WHERE date >= ? ORDER BY date").bind(hier).all()).results || [];
+    const signature = JSON.stringify(dates);
+    const cle = new Request("https://relais.cache/blocages-v1");
+    const vu = await caches.default.match(cle);
+    if (!vu || await vu.text() !== signature) {
+      await versLogiciel(env, { action: "blocages", dates, depuis: hier });
+      await caches.default.put(cle, new Response(signature, { headers: { "cache-control": "max-age=3600" } }));
+      bilan.blocages = dates.length;
+    }
+  } catch (e) {
+    console.error("blocages : envoi au logiciel impossible", String(e));
+  }
+  if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos || bilan.blocages !== void 0) console.log("synchro", JSON.stringify(bilan));
 }
 var worker_default = {
   async fetch(request, env, ctx) {

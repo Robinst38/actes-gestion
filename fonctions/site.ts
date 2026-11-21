@@ -371,6 +371,11 @@ Deno.serve(async (req) => {
       if (!p.arrivee || !p.depart || /annul/i.test(p.statut || "")) continue;
       nuits(p.arrivee, p.depart, blocked, depuis);
     }
+    // Dates bloquées dans le logiciel (travaux, entretien…) ; celles venues du site y sont déjà
+    for (const b of await lireCollection(sb, "chalet_blocages")) {
+      if (!b.debut || !b.fin || b.source === "site" || b.type === "no_checkin") continue;
+      nuits(b.debut, b.fin, blocked, depuis);
+    }
     const cfg = (await lireDoc(sb, "chalet_config", "main")) || {};
     // Tarifs : uniquement si la grille du logiciel a un prix « nuit chalet » (sinon le site garde la sienne)
     const rates = (cfg.saisons || [])
@@ -420,6 +425,36 @@ Deno.serve(async (req) => {
         faits.push(id);
       }
       return json({ ok: true, faits });
+    }
+
+    // Dates bloquées dans l'admin du site (travaux, entretien…) → agenda du logiciel (collection chalet_blocages)
+    if (b.action === "blocages") {
+      const dates = (Array.isArray(b.dates) ? b.dates : []).filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(d && d.date)))
+        .map((d: any) => ({ date: String(d.date), type: d.type === "no_checkin" ? "no_checkin" : "blocked", motif: String(d.reason || "").slice(0, 200) }))
+        .sort((x: any, y: any) => (x.date < y.date ? -1 : 1));
+      const periodes: any[] = [];
+      for (const d of dates) {
+        const der = periodes[periodes.length - 1];
+        if (der && der.fin === d.date && der.type === d.type && der.motif === d.motif) der.fin = addD(d.date, 1);
+        else periodes.push({ debut: d.date, fin: addD(d.date, 1), type: d.type, motif: d.motif });
+      }
+      const depuis = String(b.depuis || addD(auj(), -1));
+      const garder = new Set<string>();
+      for (const p of periodes) {
+        const id = "site_" + p.debut + "_" + p.type;
+        garder.add(id);
+        const ex = await lireDoc(sb, "chalet_blocages", id);
+        if (!ex || ex.fin !== p.fin || ex.motif !== p.motif) {
+          await ecrireDoc(sb, "chalet_blocages", id, { id, ...p, source: "site", majLe: new Date().toISOString() });
+        }
+      }
+      let retires = 0;
+      for (const ex of await lireCollection(sb, "chalet_blocages")) {
+        if (ex.source !== "site" || garder.has(ex.id) || String(ex.fin || "") <= depuis) continue;
+        await sb.from("documents").delete().eq("collection", "chalet_blocages").eq("id", ex.id);
+        retires++;
+      }
+      return json({ ok: true, periodes: periodes.length, retires });
     }
 
     if (!b.checkIn || !b.checkOut) return erreur("Demande incomplète.");
