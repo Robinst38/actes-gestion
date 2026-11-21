@@ -1757,7 +1757,8 @@ ${erreur ? `<div class="msg m-err">Adresse e-mail ou code incorrect. V\xE9rifiez
 <label for="email">Adresse e-mail</label><input type="text" inputmode="email" id="email" name="email" required autocomplete="email" value="${esc(email)}">
 <label for="code">Code d'acc\xE8s</label><input type="text" id="code" name="code" required minlength="6" maxlength="8" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" style="letter-spacing:.25em;font-family:ui-monospace,Menlo,monospace;text-transform:uppercase">
 <div class="btns"><button class="btn btn-v" type="submit">Acc\xE9der \xE0 mon s\xE9jour</button></div></form>
-<p class="k" style="margin-top:14px">Code perdu ? R\xE9pondez simplement \xE0 l'e-mail re\xE7u, l'association vous le renverra.</p></section>`, { status: erreur ? 401 : 200 });
+<p class="k" style="margin-top:14px">Code perdu ? R\xE9pondez simplement \xE0 l'e-mail re\xE7u, l'association vous le renverra.</p></section>
+<p style="max-width:520px;text-align:right;margin:-6px 0 0"><a href="/login" title="Acc\xE8s membre (adh\xE9rents de l'association)" aria-label="Acc\xE8s membre" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--gris);text-decoration:none;opacity:.75"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Acc\xE8s membre</a></p>`, { status: erreur ? 401 : 200 });
 }
 function joursSejour(debut, fin) {
   const out = [];
@@ -2151,38 +2152,29 @@ var LIBELLES = {
   en: { sejour: "My stay", sejourLong: "My stay (guests)", membre: "Members" },
   es: { sejour: "Mi estancia", sejourLong: "Mi estancia (clientes)", membre: "Socios" }
 };
-var CSS_ACCES = `<style>.nav-membre{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 9px;border-radius:999px;border:1px dashed currentColor;opacity:.8;text-decoration:none;color:inherit;white-space:nowrap}.nav-membre:hover{opacity:1}.nav-membre span{display:none}
-@media (min-width:1400px){a.nav-account{display:inline-flex!important;align-items:center;gap:6px}a.nav-account .nav-account-label{display:inline!important}}
-@media (min-width:1720px){.nav-membre span{display:inline}.nav-membre{padding:7px 12px}}
-@media (max-width:980px){.nav-membre{display:none}}</style>`;
-var ICONE_CLE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+var CSS_ACCES = `<style>@media (min-width:1400px){a.nav-account{display:inline-flex!important;align-items:center;gap:6px}a.nav-account .nav-account-label{display:inline!important}}</style>`;
 function accesEntete(page2, url) {
   const type = page2.headers.get("content-type") || "";
   if (!page2.ok || !type.includes("text/html")) return page2;
   const L = LIBELLES[/^\/en(\/|$)/.test(url.pathname) ? "en" : /^\/es(\/|$)/.test(url.pathname) ? "es" : "fr"];
-  const lienMembre = (href) => href && /login/.test(href) ? href : "/login";
   return new HTMLRewriter().on("head", { element(el) {
     el.append(CSS_ACCES, { html: true });
   } }).on("a.nav-account", {
     element(el) {
-      const membre = lienMembre(el.getAttribute("href"));
       el.setAttribute("href", "/sejour");
       el.removeAttribute("data-route");
       el.setAttribute("title", L.sejourLong);
       el.setAttribute("aria-label", L.sejourLong);
-      el.after(`<a class="nav-membre" href="${esc2(membre)}" title="${esc2(L.membre)}">${ICONE_CLE}<span>${esc2(L.membre)}</span></a>`, { html: true });
     }
   }).on("a.nav-account .nav-account-label", { element(el) {
     el.setInnerContent(L.sejour);
-  } }).on("li.nav-account-mobile", {
+  } }).on("li.nav-account-mobile", { element(el) {
+    el.setInnerContent(`<a href="/sejour">${esc2(L.sejourLong)}</a>`, { html: true });
+  } }).on('a[href$="login.html"]:not(.nav-account)', {
     element(el) {
-      el.setInnerContent(`<a href="/sejour">${esc2(L.sejourLong)}</a>`, { html: true });
-      el.after(`<li class="nav-account-mobile"><a href="/login">${esc2(L.membre)}</a></li>`, { html: true });
-    }
-  }).on('a[href$="login.html"]:not(.nav-account):not(.nav-membre)', {
-    element(el) {
-      el.setInnerContent(L.membre);
-      el.before(`<a href="/sejour">${esc2(L.sejourLong)}</a> \xB7 `, { html: true });
+      el.setAttribute("href", "/sejour");
+      el.removeAttribute("data-route");
+      el.setInnerContent(L.sejourLong);
     }
   }).transform(page2);
 }
