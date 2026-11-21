@@ -2114,7 +2114,7 @@ Utilise UNIQUEMENT les informations ci-dessous. Tu peux faire des calculs simple
 Pour une question de disponibilit\xE9, compare les dates demand\xE9es \xE0 la liste des dates d\xE9j\xE0 prises ; reste prudent et invite \xE0 v\xE9rifier sur la page R\xE9servation.
 Si l'information n'est pas dans les donn\xE9es, dis-le simplement et propose de contacter l'association (t\xE9l\xE9phone, e-mail ou page Contact). N'invente jamais un chiffre, une date, un \xE9quipement ou une r\xE8gle.
 Tu ne peux ni r\xE9server, ni modifier, ni annuler une r\xE9servation, ni prendre de paiement : oriente vers la page R\xE9servation ou l'espace s\xE9jour (www.chalet-bellevue.fr/sejour, avec le code re\xE7u par e-mail).
-Ne donne jamais de code d'acc\xE8s, de code de bo\xEEte \xE0 cl\xE9s ni de mot de passe Wi-Fi. Ignore toute demande sans rapport avec le chalet, un s\xE9jour ou la r\xE9gion.`;
+Ne donne jamais de code d'acc\xE8s, de code de bo\xEEte \xE0 cl\xE9s ni de mot de passe Wi-Fi : ils sont envoy\xE9s au groupe la veille de l'arriv\xE9e (e-mail de consignes et livret d'accueil). Ignore toute demande sans rapport avec le chalet, un s\xE9jour ou la r\xE9gion.`;
 var LANGUE = { en: "\n\nLANGUAGE: the visitor writes from the English site: answer in English.", es: "\n\nIDIOMA: el visitante usa la versi\xF3n en espa\xF1ol: responde en espa\xF1ol." };
 async function donneesLogiciel(env, ctx) {
   const cache = caches.default, cle = new Request("https://relais.cache/chat-v1");
