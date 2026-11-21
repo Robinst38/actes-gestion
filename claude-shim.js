@@ -27,6 +27,7 @@
   }
   async function surSession(s, evt) {
     session = s;
+    window.__actesEmail = s && s.user && s.user.email ? String(s.user.email).toLowerCase() : "";
     if (!s) { afficherConnexion(); return; }
     if (evt === "PASSWORD_RECOVERY" || /type=(invite|recovery)/.test(URL0) || window.__actesDoitChoisirMdp) {
       window.__actesDoitChoisirMdp = true; afficherChoixMdp(); return;
