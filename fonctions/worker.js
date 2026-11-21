@@ -1749,6 +1749,16 @@ function memeOrigine(request) {
   return !o || o === SITE || o === "https://chalet-bellevue.fr";
 }
 var redirige = (u) => new Response(null, { status: 303, headers: { location: u, "cache-control": "no-store" } });
+function pageConnexion(email, erreur) {
+  return page("Mon espace s\xE9jour", `<p class="eyebrow">Espace s\xE9jour</p><h1>Acc\xE9der \xE0 mon s\xE9jour</h1>
+<p class="sous">Saisissez l'adresse e-mail utilis\xE9e pour la demande et le code d'acc\xE8s \xE0 6 caract\xE8res re\xE7u par e-mail.</p>
+${erreur ? `<div class="msg m-err">Adresse e-mail ou code incorrect. V\xE9rifiez le code re\xE7u par e-mail (lettres majuscules et chiffres).</div>` : ""}
+<section class="carte" style="max-width:520px"><form method="post" action="/sejour/connexion">
+<label for="email">Adresse e-mail</label><input type="text" inputmode="email" id="email" name="email" required autocomplete="email" value="${esc(email)}">
+<label for="code">Code d'acc\xE8s</label><input type="text" id="code" name="code" required minlength="6" maxlength="8" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" style="letter-spacing:.25em;font-family:ui-monospace,Menlo,monospace;text-transform:uppercase">
+<div class="btns"><button class="btn btn-v" type="submit">Acc\xE9der \xE0 mon s\xE9jour</button></div></form>
+<p class="k" style="margin-top:14px">Code perdu ? R\xE9pondez simplement \xE0 l'e-mail re\xE7u, l'association vous le renverra.</p></section>`, { status: erreur ? 401 : 200 });
+}
 function joursSejour(debut, fin) {
   const out = [];
   for (let d = debut; d && fin && d <= fin && out.length < 60; d = new Date(Date.parse(d + "T12:00:00Z") + 864e5).toISOString().slice(0, 10)) out.push(d);
@@ -1866,6 +1876,18 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
   return h;
 }
 async function routeSejour(request, env, url) {
+  if (/^\/sejour\/?$/.test(url.pathname) || url.pathname === "/sejour/connexion") {
+    if (request.method === "POST" && url.pathname === "/sejour/connexion") {
+      if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
+      const f = await request.formData().catch(() => null);
+      const email = f ? String(f.get("email") || "").trim().slice(0, 200) : "", code = f ? String(f.get("code") || "").trim().slice(0, 20) : "";
+      const r2 = email && code ? await appel(env, "POST", null, { action: "connexion", email, code }) : { status: 400, data: {} };
+      if (r2.status === 200 && /^[a-f0-9]{24,64}$/.test(r2.data.jeton || "")) return redirige("/sejour/" + r2.data.jeton);
+      await new Promise((ok) => setTimeout(ok, 1e3));
+      return pageConnexion(email, true);
+    }
+    return pageConnexion("", false);
+  }
   const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
   const jeton = m[1], action = m[3];
@@ -2124,7 +2146,7 @@ async function pageTarifs(request, env, ctx) {
     el.append(html, { html: true });
   } }).transform(new Response(page2.body, { status: page2.status, headers: h }));
 }
-var LIBRES = [/^\/api\//, /^\/sejour\//, /^\/livret(\/|$)/, /^\/favicon/, /^\/robots\.txt$/];
+var LIBRES = [/^\/api\//, /^\/sejour(\/|$)/, /^\/livret(\/|$)/, /^\/favicon/, /^\/robots\.txt$/];
 var COOKIE = "cb_apercu";
 async function empreinteCode(code, env) {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("apercu|" + code + "|" + (env.SITE_SECRET || "")));
@@ -2368,7 +2390,7 @@ var worker_default = {
     const ferme = await filtreMaintenance(request, env, ctx, url);
     if (ferme) return ferme;
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
-    if (url.pathname.startsWith("/sejour/")) return routeSejour(request, env, url);
+    if (/^\/sejour(\/|$)/.test(url.pathname)) return routeSejour(request, env, url);
     if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
     if (url.pathname === "/api/availability" && request.method === "GET") {
       const [orig, soft] = await Promise.all([env.API.fetch(request), logiciel(env)]);

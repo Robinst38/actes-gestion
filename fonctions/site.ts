@@ -93,7 +93,8 @@ const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", c
 const fd = (iso?: string) => (iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "—");
 
 const MODELES: Record<string, { nom: string; sujet: string; corps: string }> = {
-  confirmation: { nom: "Confirmation de réservation", sujet: "Confirmation de votre réservation au {chalet} du {arrivee} au {depart}", corps: "Bonjour {contact},\n\nNous avons le plaisir de vous confirmer la réservation du {chalet} pour {groupe}, du {arrivee} au {depart} ({nuits} nuits), pour {personnes} personnes.\n\nMontant total : {total}\nAcompte à verser : {acompte}\nSolde : {solde}, à régler au plus tard le {echeance_solde}\nCaution : {caution}\n\nVotre espace séjour en ligne : {lien_client}\nVous y trouverez le contrat de location à accepter en un clic et le paiement sécurisé de l'acompte.\n\nÀ très bientôt,\n{asso}" },
+  demande: { nom: "Demande reçue (avec le code d'accès)", sujet: "Nous avons bien reçu votre demande — {chalet}", corps: "Bonjour {contact},\n\nNous avons bien reçu votre demande de réservation du {chalet} du {arrivee} au {depart} ({nuits} nuits, {personnes} personnes). Le bureau de l'association l'étudie et revient vers vous très rapidement.\n\nVous pouvez suivre votre demande dans votre espace séjour :\n{lien_connexion}\nAdresse e-mail : {email}\nCode d'accès : {code_acces}\n\nÀ très bientôt,\n{asso}" },
+  confirmation: { nom: "Confirmation de réservation", sujet: "Confirmation de votre réservation au {chalet} du {arrivee} au {depart}", corps: "Bonjour {contact},\n\nNous avons le plaisir de vous confirmer la réservation du {chalet} pour {groupe}, du {arrivee} au {depart} ({nuits} nuits), pour {personnes} personnes.\n\nMontant total : {total}\nAcompte à verser : {acompte}\nSolde : {solde}, à régler au plus tard le {echeance_solde}\nCaution : {caution}\n\nVotre espace séjour en ligne : {lien_client}\n(ou sur {lien_connexion} avec votre adresse e-mail et le code d'accès {code_acces})\nVous y trouverez le contrat de location à accepter en un clic et le paiement sécurisé de l'acompte.\n\nÀ très bientôt,\n{asso}" },
   j7: { nom: "Infos pratiques (J-7)", sujet: "Votre séjour au {chalet} approche", corps: "Bonjour {contact},\n\nVotre arrivée au {chalet} est prévue le {arrivee}. Voici les informations pratiques :\n\n{infos}\n\nLivret d'accueil (Wi-Fi, consignes, numéros utiles) : {lien_livret}\n\nPour rappel, le solde restant dû est de {reste}.\n\nNous restons disponibles pour toute question.\n\nBon voyage,\n{asso}" },
   j1: { nom: "Consignes d'arrivée et de départ (veille de l'arrivée)", sujet: "Votre arrivée demain au {chalet} — consignes", corps: "Bonjour {contact},\n\nNous avons hâte de vous accueillir demain au {chalet} !\n\nVOTRE ARRIVÉE — {arrivee}, à partir de {heure_arrivee}\nAdresse : {adresse}\n{consignes_arrivee}\n\nVOTRE DÉPART — {depart}, avant {heure_depart}\n{consignes_depart}\n\nLe livret d'accueil (Wi-Fi, équipements, tri, numéros utiles) : {lien_livret}\nVotre espace séjour (contrat, paiements) : {lien_client}\n\nUn souci sur la route ou pendant le séjour ? Appelez-nous au {tel_asso}.\n\nBonne route et à demain,\n{asso}" },
   arrivee: { nom: "Bienvenue (arrivée)", sujet: "Bienvenue au {chalet} !", corps: "Bonjour {contact},\n\nBienvenue au {chalet} ! Nous espérons que l'installation se passe bien.\n\nEn cas de besoin pendant le séjour, vous pouvez nous joindre au {tel_asso}.\n\nTrès bon séjour,\n{asso}" },
@@ -113,7 +114,7 @@ const ACTIVITES_DEFAUT = "Thermes de Luchon (espace bien-être)\nTélécabine ve
 function config(c: any) {
   const o = { nomChalet: "Chalet Bellevue", ville: "Bagnères-de-Luchon", acomptePct: 30, soldeJours: 30, caution: "", infosPratiques: "", lienAvis: "", telAsso: "", conditions: CONDITIONS_DEFAUT, reglement: REGLEMENT_DEFAUT, adhesionSejour: "", acompteArrondi: false, livretToken: "", wifiNom: "", wifiCle: "", heureArrivee: "16 h", heureDepart: "10 h", adresseChalet: "", consignesArrivee: "", consignesDepart: "", numerosUtiles: "", livretSections: [], chambres: CHAMBRES_DEFAUT, activitesSuggerees: ACTIVITES_DEFAUT, ...(c || {}) };
   o.modeles = { ...MODELES, ...((c && c.modeles) || {}) };
-  o.autoEmails = { confirmation: false, j7: false, j1: false, avis: false, relances: false, recap: false, menage: false, ...((c && c.autoEmails) || {}) };
+  o.autoEmails = { demande: false, confirmation: false, j7: false, j1: false, avis: false, relances: false, recap: false, menage: false, ...((c && c.autoEmails) || {}) };
   return o;
 }
 
@@ -154,6 +155,13 @@ function echeancier(r: any, cfg: any) {
   return l;
 }
 
+/** Code d'accès de 6 caractères pour l'espace séjour (sans 0/O, 1/I/L, pour éviter les confusions). */
+function nouveauCode(): string {
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", b = new Uint8Array(6);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => A[x % A.length]).join("");
+}
+
 function varsMsg(r: any, cfg: any, ent: any, extra: Record<string, string> = {}) {
   const e = echeancier(r, cfg), c = r.caution || {};
   return {
@@ -161,7 +169,7 @@ function varsMsg(r: any, cfg: any, ent: any, extra: Record<string, string> = {})
     arrivee: fd(r.debut), depart: fd(r.fin), nuits: String(nbN(r.debut, r.fin)), personnes: String(pers(r)),
     total: eur(total(r)), acompte: eur(e[0] ? e[0].montant : 0), solde: eur(e[1] ? e[1].montant : 0), echeance_solde: fd(e[1] && e[1].du),
     reste: eur(Math.max(0, reste(r))), caution: eur(num(c.montant) || num(cfg.caution)), infos: propre(cfg.infosPratiques),
-    lien_avis: cfg.lienAvis || "", lien_client: r.jeton ? URL_SITE + "/sejour/" + r.jeton : "", lien_livret: cfg.livretToken ? URL_SITE + "/livret?k=" + cfg.livretToken : "",
+    lien_avis: cfg.lienAvis || "", lien_client: r.jeton ? URL_SITE + "/sejour/" + r.jeton : "", lien_connexion: URL_SITE + "/sejour", code_acces: r.codeAcces || "", email: r.email || "", lien_livret: cfg.livretToken ? URL_SITE + "/livret?k=" + cfg.livretToken : "",
     heure_arrivee: cfg.heureArrivee || "16 h", heure_depart: cfg.heureDepart || "10 h", adresse: cfg.adresseChalet || "", consignes_arrivee: propre(cfg.consignesArrivee), consignes_depart: propre(cfg.consignesDepart),
     wifi: cfg.wifiNom ? cfg.wifiNom + (cfg.wifiCle ? " — mot de passe : " + cfg.wifiCle : "") : "", asso: (ent && ent.nom) || "L'association", tel_asso: cfg.telAsso || (ent && ent.tel) || "",
     retenue_txt: num(c.retenue) ? ", déduction faite de " + eur(c.retenue) + (c.motif ? " (" + c.motif + ")" : "") : "",
@@ -237,6 +245,7 @@ async function envoyer(m: Message): Promise<{ messageId: string }> {
 function echapper(s: string) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }
+
 
 // ----- _shared/helloasso.ts -----
 // Paiement en ligne avec HelloAsso (gratuit pour les associations) — API « Checkout »
@@ -344,6 +353,7 @@ async function verifierPaiements(sb: any, resaId: string, seulement?: string) {
 //   GET  + x-site-secret      → idem + « sync » : décisions et paiements des demandes du site, infos pratiques
 //   POST + x-site-secret      → enregistre une demande faite sur le site
 //   POST + x-site-secret {action:"statuts"} → reporte dans le logiciel une décision prise sur le site
+
 
 
 
@@ -494,8 +504,23 @@ Deno.serve(async (req) => {
       debut: String(b.checkIn).slice(0, 10), fin: String(b.checkOut).slice(0, 10),
       adultes: String(adultes), enfants: String(enfants), personnes: String(adultes + enfants),
       options: { menage: !!b.wantsCleaning }, tarif: montant > 0 ? String(montant) : "", paiements: [], notes, siteId: b.siteId ? String(b.siteId) : null,
-      jeton: nouveauJeton(), ...(detail.length ? { detailTarif: detail } : {}), ...(num(b.acompte) > 0 ? { acompteFixe: r2(num(b.acompte)) } : {}),
+      jeton: nouveauJeton(), codeAcces: nouveauCode(), ...(detail.length ? { detailTarif: detail } : {}), ...(num(b.acompte) > 0 ? { acompteFixe: r2(num(b.acompte)) } : {}),
     });
+    // Accusé de réception avec le code d'accès à l'espace séjour (si activé dans Automatisations)
+    try {
+      const cfgC = config(await lireDoc(sb, "chalet_config", "main"));
+      const r = await lireDoc(sb, "crm_actes_resas", id);
+      const m = cfgC.modeles.demande;
+      if (cfgC.autoEmails.demande && m && r && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email || "") && smtpConfigure() && !(await lireDoc(sb, "chalet_envois_auto", id + "__demande"))) {
+        const ent = await entreprise(sb).catch(() => ({} as any));
+        const v = varsMsg({ ...r, id }, cfgC, ent);
+        const sujet = remplir(m.sujet, v);
+        await envoyer({ to: r.email, subject: sujet, body: remplir(m.corps, v), replyTo: ent.email || undefined });
+        await ecrireDoc(sb, "chalet_envois_auto", id + "__demande", { resaId: id, type: "demande", cle: "demande", date: auj(), a: r.email, sujet });
+      }
+    } catch (e) {
+      console.error("accusé de réception non envoyé", String(e));
+    }
     return json({ ok: true, id }, 201);
   }
   return erreur("Méthode non prise en charge.", 405);
