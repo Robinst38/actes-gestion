@@ -1,8 +1,8 @@
 /* Service worker : l'appli s'ouvre instantanément et reste affichable sans réseau.
    Les données (Supabase) ne sont jamais mises en cache ici. */
-const VERSION = "livret-20261121";
+const VERSION = "favicon-20261121";
 const CACHE = "actes-" + VERSION;
-const COQUILLE = ["./", "index.html", "app.css", "config.js", "supabase.js", "591.supabase.js", "claude-shim.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
+const COQUILLE = ["./", "index.html", "app.css", "config.js", "supabase.js", "591.supabase.js", "claude-shim.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icon.svg", "favicon.ico"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(COQUILLE)).then(() => self.skipWaiting()));
