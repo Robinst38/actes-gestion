@@ -2060,21 +2060,17 @@ async function empreinteCode(code, env) {
 }
 async function etatMaintenance(env, ctx) {
   const cache = caches.default;
-  const frais = new Request("https://relais.cache/maintenance-v1");
-  const secours = new Request("https://relais.cache/maintenance-secours-v1");
-  const enCache = await cache.match(frais);
+  const cle = new Request("https://relais.cache/maintenance-v2");
+  const enCache = await cache.match(cle);
   if (enCache) return enCache.json();
-  const soft = await logiciel(env, true, 3e3);
-  let etat;
-  if (soft && soft.maintenance) {
-    const m = soft.maintenance;
-    etat = { actif: !!m.actif, jeton: m.code && m.code.length >= 4 ? await empreinteCode(m.code, env) : "" };
-    ctx.waitUntil(cache.put(secours, new Response(JSON.stringify(etat), { headers: { "cache-control": "max-age=604800" } })));
-  } else {
-    const vieux = await cache.match(secours);
-    etat = vieux ? await vieux.json() : { actif: true, jeton: "" };
+  let etat = { actif: false, jeton: "" };
+  try {
+    const l = env.DB ? await env.DB.prepare("SELECT value FROM site_content WHERE key = 'relais_maintenance'").first() : null;
+    if (l && l.value) etat = JSON.parse(l.value);
+  } catch (e) {
+    console.error("maintenance : lecture impossible", String(e));
   }
-  ctx.waitUntil(cache.put(frais, new Response(JSON.stringify(etat), { headers: { "cache-control": "max-age=60" } })));
+  ctx.waitUntil(cache.put(cle, new Response(JSON.stringify(etat), { headers: { "cache-control": "max-age=20" } })));
   return etat;
 }
 function lireCookie(request, nom) {
@@ -2204,6 +2200,15 @@ async function synchroniser(env) {
       bilan.infos = true;
     }
   }
+  if (soft.maintenance) {
+    const m = soft.maintenance;
+    const val = JSON.stringify({ actif: !!m.actif, jeton: m.code && m.code.length >= 4 ? await empreinteCode(m.code, env) : "" });
+    const actuel = await DB.prepare("SELECT value FROM site_content WHERE key = 'relais_maintenance'").first();
+    if (!actuel || actuel.value !== val) {
+      await DB.prepare("INSERT INTO site_content (key, value, updated_at) VALUES ('relais_maintenance', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(val, maintenant).run();
+      bilan.maintenance = !!m.actif;
+    }
+  }
   try {
     const hier = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     const dates = (await DB.prepare("SELECT date, type, reason FROM blocked_dates WHERE date >= ? ORDER BY date").bind(hier).all()).results || [];
@@ -2218,7 +2223,7 @@ async function synchroniser(env) {
   } catch (e) {
     console.error("blocages : envoi au logiciel impossible", String(e));
   }
-  if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos || bilan.blocages !== void 0) console.log("synchro", JSON.stringify(bilan));
+  if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos || bilan.blocages !== void 0 || bilan.maintenance !== void 0) console.log("synchro", JSON.stringify(bilan));
 }
 var worker_default = {
   async fetch(request, env, ctx) {
