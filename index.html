@@ -1217,8 +1217,88 @@ return L.sort(function(a,b){return String(b.date).localeCompare(a.date)})}
 function useJournal(P){var plats=useCol("actes_plateformes"),deps=useCol("actes_depenses"),pt=useCol("chalet_pointage");var L=uM(function(){return journal(P,plats,deps)},[P.resas,plats,deps,P.membres,P.compta]);var pts={};pt.forEach(function(x){pts[x.id]=x});return{L:L,pts:pts,plats:plats}}
 
 function Treso(P){var a=uS("echeances"),t=a[0],setT=a[1];return h("div",null,h(Bandeau),h(Toast),h(Titre,{t:"Trésorerie",s:"Échéances et relances, journal des recettes et dépenses, rapprochement bancaire, bilan pour l'AG"}),
-h(Onglets,{v:t,set:setT,liste:[["echeances","Échéances & relances"],["journal","Journal"],["banque","Rapprochement bancaire"],["bilan","Bilan annuel (AG)"]]}),
-t==="echeances"&&h(Echeances,P),t==="journal"&&h(Journal,P),t==="banque"&&h(Banque,P),t==="bilan"&&h(Bilan,P))}
+h(Onglets,{v:t,set:setT,liste:[["echeances","Échéances & relances"],["journal","Journal"],["banque","Rapprochement bancaire"],["bilan","Bilan annuel (AG)"],["livret","📘 Livret comptable"]]}),
+t==="echeances"&&h(Echeances,P),t==="journal"&&h(Journal,P),t==="banque"&&h(Banque,P),t==="bilan"&&h(Bilan,P),t==="livret"&&h(LivretCiel))}
+
+/* ================= LIVRET COMPTABLE (liaison avec Ciel) ================= */
+function LivretCiel(){var V="#1F3D2B",T="#C0693E",G="#6E7469",B="#E8E3D8";
+function P_(){return h.apply(null,["p",{className:"text-sm mb-2",style:{lineHeight:1.55}}].concat([].slice.call(arguments)))}
+function Li(){return h.apply(null,["li",{className:"text-sm mb-1",style:{lineHeight:1.5}}].concat([].slice.call(arguments)))}
+function Ul(){return h.apply(null,["ul",{className:"mb-2",style:{paddingLeft:20,listStyle:"disc"}}].concat([].slice.call(arguments)))}
+function Ol(){return h.apply(null,["ol",{className:"mb-2",style:{paddingLeft:20,listStyle:"decimal"}}].concat([].slice.call(arguments)))}
+function Bx(p){return h("div",{className:"rounded-lg p-3 my-3 text-sm",style:{background:p.alerte?"#FBEFE8":"#EEF3EF",borderLeft:"4px solid "+(p.alerte?T:V),lineHeight:1.5}},p.titre&&h("b",{style:{display:"block",marginBottom:4}},p.titre),p.children)}
+function Tb(p){return h("div",{className:"overflow-x-auto my-2"},h("table",{className:"w-full text-sm",style:{borderCollapse:"collapse"}},h("thead",null,h("tr",null,p.cols.map(function(c,i){return h("th",{key:i,className:"text-left px-2 py-1",style:{borderBottom:"2px solid "+B,color:G,fontWeight:600,whiteSpace:"nowrap"}},c)}))),h("tbody",null,p.rows.map(function(r,i){return h("tr",{key:i},r.map(function(c,j){return h("td",{key:j,className:"px-2 py-1 align-top",style:{borderBottom:"1px solid "+B}},c)}))}))))}
+function S(n,t){return h("h3",{className:"btp-display text-lg mt-1 mb-2",style:{color:V}},h("span",{style:{color:T,marginRight:8}},n),t)}
+return h("div",{className:"space-y-4",style:{maxWidth:880}},
+h(Carte,null,S("","Livret comptable — liaison avec Ciel Compta"),
+P_("Ce livret explique comment faire passer les chiffres de l'appli dans la comptabilité officielle de l'association, tenue sur ",h("b",null,"Ciel Compta"),". À garder sous la main par le trésorier et le trésorier adjoint."),
+h(Bx,{titre:"En une phrase"},"On saisit tout dans l'appli au quotidien ; une fois par mois, on exporte les écritures et on les importe dans Ciel. Les chiffres vont toujours dans le même sens : de l'appli vers Ciel, jamais l'inverse.")),
+
+h(Carte,null,S("1.","Qui fait quoi"),
+h(Tb,{cols:["","L'appli de gestion","Ciel Compta"],rows:[
+["Rôle","Le quotidien","La comptabilité officielle"],
+["On y saisit","Réservations, factures, paiements reçus, dépenses, cotisations, dons","Rien de ce qui vient de l'appli (seulement les écritures de fin d'année si besoin : amortissements, provisions…)"],
+["On y consulte","Échéances, relances, journal, tableau de bord, bilan d'activité","Grand livre, balance, bilan et compte de résultat pour l'AG"],
+["Rapprochement bancaire","Oui : on pointe chaque ligne du relevé (onglet « Rapprochement bancaire »)","On contrôle seulement le solde du compte 512"]]}),
+h(Bx,{alerte:1,titre:"Règle d'or"},"Ne jamais ressaisir à la main dans Ciel une opération qui est déjà dans l'appli : elle serait comptée deux fois.")),
+
+h(Carte,null,S("2.","Réglages à faire une seule fois dans Ciel"),
+h("b",{className:"text-sm"},"a) Les journaux"),
+P_("Vérifier que ces trois journaux existent dans le dossier Ciel (sinon les créer avec ces codes exacts) :"),
+h(Tb,{cols:["Code","Journal","Utilisé pour"],rows:[["BQ","Banque","Tout ce qui passe par le compte bancaire (virements, CB, chèques)"],["CA","Caisse","Les espèces"],["OD","Opérations diverses","Les cautions (dépôts reçus puis rendus)"]]}),
+h("b",{className:"text-sm"},"b) La longueur des comptes"),
+P_("Ciel complète souvent les numéros de compte à 8 chiffres (706 devient 70600000). Regarder la longueur utilisée dans le dossier (paramètres du dossier comptable) et créer les comptes ci-dessous s'ils n'existent pas. Si Ciel refuse un compte à l'import, c'est presque toujours une question de longueur."),
+h(Tb,{cols:["Compte","Intitulé","Ce qui y va"],rows:[
+["512","Banque","Contrepartie de toutes les opérations bancaires"],["530","Caisse","Contrepartie des opérations en espèces"],["165","Dépôts et cautionnements reçus","Cautions des locataires"],
+["706","Prestations de services","Locations du chalet"],["756","Cotisations","Cotisations des adhérents"],["754","Dons manuels","Dons"],["74","Subventions d'exploitation","Subventions"],["707","Ventes de marchandises","Ventes (souvenirs…)"],["768","Produits financiers","Intérêts du livret"],["758","Produits divers de gestion courante","Autres recettes"],
+["6061","Fournitures non stockables","Eau, électricité, gaz, bois, fioul"],["6063","Petit équipement","Matériel, vaisselle, mobilier"],["6064","Fournitures administratives","Papeterie, bureau"],["6068","Autres fournitures","Alimentation, courses"],["613","Locations","Location de matériel"],["615","Entretien et réparations","Travaux, dépannages, maintenance"],["616","Primes d'assurance","Assurance du chalet"],["622","Honoraires et commissions","Commissions Airbnb / Booking, comptable"],["623","Publicité, publications","Site web, impressions"],["625","Déplacements","Carburant, péages, train"],["626","Frais postaux et télécom","Téléphone, internet, timbres"],["627","Services bancaires","Frais bancaires"],["6283","Nettoyage","Ménage, linge, blanchisserie"],["635","Autres impôts et taxes","Impôts et taxes"],["6378","Taxe de séjour reversée","Taxe de séjour"],["658","Charges diverses","Le reste"]]}),
+P_(h("span",{style:{color:G}},"C'est l'appli qui choisit le compte, d'après la catégorie et le libellé de chaque opération. Une catégorie bien choisie à la saisie = le bon compte dans Ciel.")),
+h("b",{className:"text-sm"},"c) Le format d'import"),
+P_("Dans Ciel, créer un ",h("b",null,"import paramétrable d'écritures")," (menu des imports / import paramétrable), nommé par exemple « Appli ACTES », avec ces réglages :"),
+Ul(Li("Type de fichier : texte délimité ; séparateur : ",h("b",null,"point-virgule (;)")),Li("Première ligne : ",h("b",null,"titres des colonnes, à ignorer")),Li("Dates : ",h("b",null,"JJ/MM/AAAA")," ; décimales : ",h("b",null,"virgule")),Li("Encodage : UTF-8 (si les accents s'affichent mal, essayer « Windows / ANSI »)")),
+P_("Puis faire correspondre les colonnes du fichier aux champs de Ciel :"),
+h(Tb,{cols:["Colonne du fichier","Champ Ciel"],rows:[["1. Date","Date de l'écriture"],["2. Journal","Code journal"],["3. Pièce","N° de pièce"],["4. Compte","N° de compte"],["5. Intitulé du compte","(ignorer, ou intitulé si Ciel crée le compte)"],["6. Libellé","Libellé de l'écriture"],["7. Débit","Montant au débit"],["8. Crédit","Montant au crédit"],["9. Mode / 10. Origine","(ignorer)"]]}),
+h(Bx,null,"Astuce : faire un premier essai avec un fichier d'un seul mois, sur une copie de sauvegarde du dossier Ciel. Une fois le format validé, il resservira tel quel tous les mois.")),
+
+h(Carte,null,S("3.","Chaque mois, pas à pas"),
+Ol(
+Li(h("b",null,"Compléter l'appli")," : toutes les factures, paiements, dépenses et cotisations du mois sont saisis, avec la bonne catégorie."),
+Li(h("b",null,"Pointer la banque")," : onglet « Rapprochement bancaire », importer le relevé du mois et pointer chaque ligne. Tout ce qui reste non pointé est soit une saisie oubliée, soit une erreur."),
+Li(h("b",null,"Exporter")," : onglet « Journal », choisir l'année, puis bouton « Écritures comptables ». Un fichier ecritures-comptables-AAAA.csv est téléchargé."),
+Li(h("b",null,"Ne garder que le mois")," : l'export contient toute l'année. Ouvrir le fichier dans Excel ou LibreOffice, filtrer sur la colonne Date, supprimer les lignes des autres mois (garder la ligne de titres), enregistrer au format CSV point-virgule."),
+Li(h("b",null,"Importer dans Ciel")," : lancer l'import paramétrable « Appli ACTES » avec ce fichier et lire le rapport d'import."),
+Li(h("b",null,"Contrôler")," : dans Ciel, le solde du compte 512 doit être égal au solde du relevé bancaire à la fin du mois ; le compte 530 doit être égal à l'argent réellement en caisse."),
+Li(h("b",null,"Archiver")," : ranger le fichier importé dans le Drive, dossier Trésorerie & comptabilité, en le nommant AAAA-MM-ecritures-importees.csv.")),
+h(Bx,{alerte:1,titre:"Attention aux numéros de pièce"},"Les numéros de pièce (E26-0001…) sont recalculés à chaque export, dans l'ordre des dates. Une même opération peut donc avoir un numéro différent d'un export à l'autre : pour savoir ce qui est déjà dans Ciel, se fier aux mois déjà importés (le Drive), pas aux numéros.")),
+
+h(Carte,null,S("4.","Corriger une erreur après l'import"),
+Ul(
+Li(h("b",null,"Opération oubliée d'un mois déjà importé")," : la saisir dans l'appli, refaire l'export, ne garder que ses deux lignes et les importer seules."),
+Li(h("b",null,"Montant ou catégorie faux")," : corriger dans l'appli (pour que les tableaux de bord soient justes), puis dans Ciel passer une écriture de correction au journal OD, ou modifier l'écriture si le mois n'est pas clôturé."),
+Li(h("b",null,"Opération supprimée dans l'appli")," : supprimer aussi l'écriture correspondante dans Ciel (ou l'extourner au journal OD).")),
+P_("Le plus simple : une fois un mois importé, ne plus y toucher dans l'appli sauf vraie erreur, et noter chaque correction faite des deux côtés.")),
+
+h(Carte,null,S("5.","Fin d'année et AG"),
+Ol(
+Li("Vérifier que les 12 mois sont importés et que le compte 512 colle au relevé du 31 décembre."),
+Li("Comparer le total des recettes et des dépenses de l'onglet « Bilan annuel (AG) » avec le compte de résultat de Ciel : l'écart doit être nul, sauf écritures passées uniquement dans Ciel (amortissements…)."),
+Li("Éditer dans Ciel le bilan, le compte de résultat et le grand livre ; les présenter en AG avec les indicateurs d'activité de l'appli (occupation, nuitées, chiffre d'affaires)."),
+Li("Faire une sauvegarde du dossier Ciel et une sauvegarde de l'appli (Mon association › Sauvegarde) ; ranger les deux dans le Drive, dossier Trésorerie & comptabilité › Bilans annuels."),
+Li("Clôturer l'exercice dans Ciel."))),
+
+h(Carte,null,S("6.","En cas de problème à l'import"),
+h(Tb,{cols:["Message ou symptôme","Cause probable","Solution"],rows:[
+["Compte inexistant","Longueur des comptes différente, ou compte pas encore créé","Créer le compte dans Ciel (ou régler la longueur), puis relancer"],
+["Journal inconnu","BQ, CA ou OD n'existe pas dans le dossier","Créer le journal avec ce code exact"],
+["Date hors exercice","L'exercice n'est pas ouvert dans Ciel, ou une ligne d'un autre mois traîne","Ouvrir l'exercice, ou retirer la ligne du fichier"],
+["Écriture déséquilibrée","Une des deux lignes d'une pièce a été supprimée en filtrant","Chaque opération = 2 lignes avec le même n° de pièce : garder les deux"],
+["Montants multipliés par 100 ou à zéro","Séparateur décimal mal réglé","Régler la virgule comme séparateur décimal dans le format"],
+["Accents illisibles","Encodage","Changer l'encodage du format (UTF-8 ou Windows)"],
+["Opérations en double","Un mois importé deux fois","Supprimer le lot en double dans Ciel ; vérifier la liste des mois archivés dans le Drive"]]})),
+
+h(Carte,null,S("","Bon à savoir"),
+P_("Sage a arrêté de faire évoluer la gamme Ciel ; le logiciel continue de fonctionner mais ne reçoit plus de mises à jour. Son remplaçant chez Sage est Sage 50 Comptabilité, qui sait reprendre un dossier Ciel et possède lui aussi un import paramétrable : le même fichier d'export de l'appli pourra y être importé de la même façon, si l'association change un jour."))
+)}
 
 function Echeances(P){var cfg=useCfg();var a=uS("tout"),f=a[0],setF=a[1];var t=auj();var b=uS(null),enc=b[0],setEnc=b[1];
 var items=[];(P.resas||[]).forEach(function(r){if(!actif(r)||!total(r))return;echeancier(r,cfg).forEach(function(e){if(e.etat!=="paye"&&e.reste>0.009)items.push(Object.assign({r:r},e))})});
