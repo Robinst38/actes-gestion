@@ -2142,9 +2142,46 @@ async function pageTarifs(request, env, ctx) {
   if (docs.reglement) html += sectionDocument("reglement", "Pendant votre s\xE9jour", "R\xE8glement int\xE9rieur", docs.reglement, !!docs.conditions);
   const h = new Headers(page2.headers);
   h.set("cache-control", "public, max-age=60");
-  return new HTMLRewriter().on("main", { element(el) {
+  return accesEntete(new HTMLRewriter().on("main", { element(el) {
     el.append(html, { html: true });
-  } }).transform(new Response(page2.body, { status: page2.status, headers: h }));
+  } }).transform(new Response(page2.body, { status: page2.status, headers: h })), new URL(request.url));
+}
+var LIBELLES = {
+  fr: { sejour: "Espace s\xE9jour", sejourLong: "Espace s\xE9jour client", membre: "Acc\xE8s membre" },
+  en: { sejour: "My stay", sejourLong: "My stay (guests)", membre: "Members" },
+  es: { sejour: "Mi estancia", sejourLong: "Mi estancia (clientes)", membre: "Socios" }
+};
+var CSS_ACCES = `<style>.nav-membre{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 12px;border-radius:999px;border:1px dashed currentColor;opacity:.8;text-decoration:none;color:inherit;white-space:nowrap}.nav-membre:hover{opacity:1}@media (max-width:980px){.nav-membre{display:none}}</style>`;
+var ICONE_CLE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+function accesEntete(page2, url) {
+  const type = page2.headers.get("content-type") || "";
+  if (!page2.ok || !type.includes("text/html")) return page2;
+  const L = LIBELLES[/^\/en(\/|$)/.test(url.pathname) ? "en" : /^\/es(\/|$)/.test(url.pathname) ? "es" : "fr"];
+  const lienMembre = (href) => href && /login/.test(href) ? href : "/login";
+  return new HTMLRewriter().on("head", { element(el) {
+    el.append(CSS_ACCES, { html: true });
+  } }).on("a.nav-account", {
+    element(el) {
+      const membre = lienMembre(el.getAttribute("href"));
+      el.setAttribute("href", "/sejour");
+      el.removeAttribute("data-route");
+      el.setAttribute("title", L.sejourLong);
+      el.setAttribute("aria-label", L.sejourLong);
+      el.after(`<a class="nav-membre" href="${esc2(membre)}" title="${esc2(L.membre)}">${ICONE_CLE}<span>${esc2(L.membre)}</span></a>`, { html: true });
+    }
+  }).on("a.nav-account .nav-account-label", { element(el) {
+    el.setInnerContent(L.sejour);
+  } }).on("li.nav-account-mobile", {
+    element(el) {
+      el.setInnerContent(`<a href="/sejour">${esc2(L.sejourLong)}</a>`, { html: true });
+      el.after(`<li class="nav-account-mobile"><a href="/login">${esc2(L.membre)}</a></li>`, { html: true });
+    }
+  }).on('a[href$="login.html"]:not(.nav-account):not(.nav-membre)', {
+    element(el) {
+      el.setInnerContent(L.membre);
+      el.before(`<a href="/sejour">${esc2(L.sejourLong)}</a> \xB7 `, { html: true });
+    }
+  }).transform(page2);
 }
 var LIBRES = [/^\/api\//, /^\/sejour(\/|$)/, /^\/livret(\/|$)/, /^\/favicon/, /^\/robots\.txt$/];
 var COOKIE = "cb_apercu";
@@ -2424,7 +2461,7 @@ var worker_default = {
     }
     if (url.pathname.startsWith("/api/")) return env.API.fetch(request);
     if (url.pathname === "/__apercu") return Response.redirect(url.origin + "/", 303);
-    return fetch(request);
+    return accesEntete(await fetch(request), url);
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(synchroniser(env).catch((e) => console.error("synchro en \xE9chec", String(e))));
