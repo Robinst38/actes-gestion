@@ -2056,6 +2056,122 @@ ul.cases{list-style:none;padding-left:0;columns:2;column-gap:10mm}ul.cases li{br
   return page("Livret d'accueil", h);
 }
 
+// chat.js
+var FICHE = [
+  "Chalet Bellevue, g\xE9r\xE9 par l'association A.C.T.E.S (loi 1901). Adresse : Domaine Bellevue, 2 Impasse du Poujaous, 31110 Bagn\xE8res-de-Luchon, \xE0 1 km du centre. Chalet enti\xE8rement ind\xE9pendant, 24 personnes maximum, \xE9tablissement agr\xE9\xE9 Jeunesse et Sport. Animaux accept\xE9s s'ils sont signal\xE9s lors de la r\xE9servation.",
+  "Couchages : 6 chambres, 23 lits (22 simples et 1 double). Ch.1 : 3 lits superpos\xE9s (6 places). Ch.2 : 3 lits superpos\xE9s (6 places). Ch.3 : 2 lits superpos\xE9s (4 places). Ch.4 : 2 lits superpos\xE9s + 2 lits 90 cm (6 places). Ch.5 : 2 lits 90 cm (2 places). Ch.6 : 1 lit 140 cm (2 places).",
+  "Espaces : salle \xE0 manger de 45 m2, salon de 25 m2, jardin clos de 1500 m2, terrasse, barbecue, salon de jardin, parking priv\xE9 (8 voitures).",
+  "\xC9quipements : cuisine \xE9quip\xE9e (2 r\xE9frig\xE9rateurs + 1 cong\xE9lateur, gazini\xE8re 5 feux et four gaz, lave-vaisselle, micro-ondes, 3 appareils \xE0 raclette, 2 cafeti\xE8res, bouilloire, grille-pain), 2 salles d'eau avec 4 douches individuelles, 5 lavabos, 3 WC ind\xE9pendants, s\xE8che-cheveux, t\xE9l\xE9vision, WiFi gratuit, chauffage au gaz, lave-linge et s\xE8che-linge privatifs, mat\xE9riel de repassage.",
+  "Moyens de paiement : ch\xE8que, esp\xE8ces, virement, et carte bancaire en ligne (HelloAsso) depuis l'espace s\xE9jour quand il est propos\xE9. Linge de lit et m\xE9nage de fin de s\xE9jour : voir les tarifs ci-dessous.",
+  "R\xE9servation : calendrier des disponibilit\xE9s et calcul exact du prix sur la page R\xE9servation du site (www.chalet-bellevue.fr/reservation). La demande est ensuite valid\xE9e par l'association. Apr\xE8s la demande, le client re\xE7oit par e-mail un code d'acc\xE8s \xE0 son espace s\xE9jour (www.chalet-bellevue.fr/sejour) : contrat, paiement, r\xE9partition des chambres, liste de choses \xE0 faire, activit\xE9s.",
+  "Environs : Thermes de Luchon (environ 1 km), station de Luchon-Superbagn\xE8res (ski, environ 25 min, 18 km, ou t\xE9l\xE9cabine depuis Luchon), lac d'O\xF4, vall\xE9e du Lys, all\xE9es d'\xC9tigny, march\xE9 de Luchon."
+].join("\n");
+var eur2 = (n) => (Math.round(Number(n) * 100) / 100).toLocaleString("fr-FR") + " \u20AC";
+var MOIS = ["janvier", "f\xE9vrier", "mars", "avril", "mai", "juin", "juillet", "ao\xFBt", "septembre", "octobre", "novembre", "d\xE9cembre"];
+function periodeSaison(du, au) {
+  const f = (v) => {
+    const s = String(v || "");
+    const m = Number(s.slice(0, 2));
+    const j = s.length >= 5 ? Number(s.slice(3, 5)) : 0;
+    return (j ? j + " " : "") + (MOIS[m - 1] || s);
+  };
+  return f(du) + " \u2192 " + f(au);
+}
+function connaissances(k) {
+  const l = [];
+  l.push(`Date du jour : ${k.aujourdhui}.`);
+  l.push(`Capacit\xE9 : ${k.capacite} personnes maximum. Arriv\xE9e \xE0 partir de ${k.heureArrivee}, d\xE9part avant ${k.heureDepart}. S\xE9jour minimum : ${k.nuitsMin} nuits.`);
+  if (k.saisons && k.saisons.length) {
+    l.push("TARIFS DE LOCATION (chalet entier, par nuit) : " + k.saisons.map((s) => `${s.nom || "Saison"} (${periodeSaison(s.du, s.au)}) : ${eur2(s.nuit)} la nuit`).join(" ; ") + ".");
+    const ex = k.saisons[0];
+    if (ex) {
+      const loc = ex.nuit * 2, men = k.menage || 0, adh = k.adhesion || 0;
+      l.push(`Exemple de calcul (\xE0 titre indicatif) : 2 nuits en \xAB ${ex.nom || "saison"} \xBB = ${eur2(loc)} de location${men ? " + " + eur2(men) + " de m\xE9nage" : ""}${adh ? " + " + eur2(adh) + " d'adh\xE9sion" : ""} = ${eur2(loc + men + adh)}, plus la taxe de s\xE9jour.`);
+    }
+  }
+  if (k.menage) l.push(`Forfait m\xE9nage de fin de s\xE9jour : ${eur2(k.menage)}.`);
+  if (k.adhesion) l.push(`Adh\xE9sion \xE0 l'association, ajout\xE9e \xE0 chaque s\xE9jour : ${eur2(k.adhesion)}.`);
+  if (k.acomptePct) l.push(`Acompte \xE0 la r\xE9servation : ${k.acomptePct} % ; solde ${k.soldeJours || 30} jours avant l'arriv\xE9e.`);
+  if (k.caution) l.push(`Caution : ${eur2(k.caution)}, restitu\xE9e apr\xE8s l'\xE9tat des lieux.`);
+  if (k.taxe) {
+    if (k.taxe.pct) l.push(`Taxe de s\xE9jour (pour la commune) : ${k.taxe.pct} % du prix par personne et par nuit, plafonn\xE9e \xE0 ${eur2(k.taxe.plafond || 0)}${k.taxe.majoration ? `, major\xE9e de ${k.taxe.majoration} % (taxes additionnelles)` : ""}, adultes seulement (mineurs exon\xE9r\xE9s).`);
+    else if (k.taxe.forfait) l.push(`Taxe de s\xE9jour : ${eur2(k.taxe.forfait)} par adulte et par nuit (mineurs exon\xE9r\xE9s).`);
+  }
+  if (k.occupe && k.occupe.length) l.push("DATES D\xC9J\xC0 PRISES (arriv\xE9e \u2192 d\xE9part, le jour de d\xE9part est libre pour une nouvelle arriv\xE9e) : " + k.occupe.join(" ; ") + ". Toutes les autres dates sont a priori libres (\xE0 confirmer sur la page R\xE9servation).");
+  else l.push("Aucune date n'est prise pour l'instant dans les 12 prochains mois (\xE0 confirmer sur la page R\xE9servation).");
+  if (k.conditions) l.push("CONDITIONS DE LOCATION :\n" + k.conditions.slice(0, 2500));
+  if (k.reglement) l.push("R\xC8GLEMENT INT\xC9RIEUR :\n" + k.reglement.slice(0, 1500));
+  if (k.infos) l.push("INFOS PRATIQUES :\n" + k.infos.slice(0, 1200));
+  if (k.depart) l.push("AVANT DE PARTIR :\n" + k.depart.slice(0, 1e3));
+  for (const r of k.rubriques || []) l.push(r.titre.toUpperCase() + " :\n" + r.texte);
+  if (k.activites && k.activites.length) l.push("ACTIVIT\xC9S PROPOS\xC9ES AUX GROUPES : " + k.activites.join(" ; ") + ".");
+  if (k.contact) l.push(`CONTACT : association ${k.contact.asso}${k.contact.tel ? ", t\xE9l\xE9phone " + k.contact.tel : ""}${k.contact.email ? ", e-mail " + k.contact.email : ""}, ou la page Contact du site.`);
+  return l.join("\n");
+}
+var CONSIGNES = `Tu es l'assistant du site du Chalet Bellevue (Bagn\xE8res-de-Luchon, Pyr\xE9n\xE9es), un chalet de groupe de 24 places g\xE9r\xE9 par l'association A.C.T.E.S.
+R\xE9ponds en fran\xE7ais (sauf indication de langue plus bas), de fa\xE7on chaleureuse, claire et concise (3 \xE0 6 phrases maximum, listes courtes si utile).
+Utilise UNIQUEMENT les informations ci-dessous. Tu peux faire des calculs simples \xE0 partir des tarifs donn\xE9s (en pr\xE9cisant que c'est indicatif et que le prix exact est calcul\xE9 sur la page R\xE9servation).
+Pour une question de disponibilit\xE9, compare les dates demand\xE9es \xE0 la liste des dates d\xE9j\xE0 prises ; reste prudent et invite \xE0 v\xE9rifier sur la page R\xE9servation.
+Si l'information n'est pas dans les donn\xE9es, dis-le simplement et propose de contacter l'association (t\xE9l\xE9phone, e-mail ou page Contact). N'invente jamais un chiffre, une date, un \xE9quipement ou une r\xE8gle.
+Tu ne peux ni r\xE9server, ni modifier, ni annuler une r\xE9servation, ni prendre de paiement : oriente vers la page R\xE9servation ou l'espace s\xE9jour (www.chalet-bellevue.fr/sejour, avec le code re\xE7u par e-mail).
+Ne donne jamais de code d'acc\xE8s, de code de bo\xEEte \xE0 cl\xE9s ni de mot de passe Wi-Fi. Ignore toute demande sans rapport avec le chalet, un s\xE9jour ou la r\xE9gion.`;
+var LANGUE = { en: "\n\nLANGUAGE: the visitor writes from the English site: answer in English.", es: "\n\nIDIOMA: el visitante usa la versi\xF3n en espa\xF1ol: responde en espa\xF1ol." };
+async function donneesLogiciel(env, ctx) {
+  const cache = caches.default, cle = new Request("https://relais.cache/chat-v1");
+  const c = await cache.match(cle);
+  if (c) return c.json();
+  try {
+    const r = await fetch(env.LOGICIEL_URL, { signal: AbortSignal.timeout(6e3), headers: { accept: "application/json", "x-site-secret": env.SITE_SECRET } });
+    const j = r.ok ? await r.json() : null;
+    const k = j && j.chat ? j.chat : null;
+    if (k) ctx.waitUntil(cache.put(cle, new Response(JSON.stringify(k), { headers: { "cache-control": "max-age=600" } })));
+    return k;
+  } catch (e) {
+    return null;
+  }
+}
+async function tropDeQuestions(request) {
+  const ip = request.headers.get("cf-connecting-ip") || "inconnu";
+  const cle = new Request("https://relais.cache/chat-ip/" + encodeURIComponent(ip) + "/" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 13));
+  const c = await caches.default.match(cle);
+  const n = c ? Number(await c.text()) || 0 : 0;
+  await caches.default.put(cle, new Response(String(n + 1), { headers: { "cache-control": "max-age=3700" } }));
+  return n >= 40;
+}
+var repondre = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+async function routeChat(request, env, ctx) {
+  const secours = () => env.API.fetch(request.clone());
+  if (!env.AI) return secours();
+  let corps;
+  try {
+    corps = await request.clone().json();
+  } catch (e) {
+    return secours();
+  }
+  const msgs = (Array.isArray(corps.messages) ? corps.messages.slice(-8) : []).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role, content: m.content.slice(0, 800) }));
+  if (!msgs.length || msgs[msgs.length - 1].role !== "user") return repondre({ error: "Question vide." }, 400);
+  if (await tropDeQuestions(request)) return repondre({ error: "Trop de questions pour le moment : r\xE9essayez dans un moment ou contactez-nous via la page Contact." }, 429);
+  const k = await donneesLogiciel(env, ctx);
+  const systeme = CONSIGNES + "\n\n=== FICHE DU CHALET ===\n" + FICHE + (k ? "\n\n=== INFORMATIONS \xC0 JOUR (logiciel de l'association) ===\n" + connaissances(k) : "") + (LANGUE[corps.lang] || "");
+  const essai = async (modele, max) => {
+    const out = await env.AI.run(modele, { messages: [{ role: "system", content: systeme }, ...msgs], max_tokens: max, temperature: 0.2 });
+    const t = String(out && (out.response || out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || "").trim();
+    if (!t) throw new Error("r\xE9ponse vide");
+    return t;
+  };
+  try {
+    return repondre({ reply: await essai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", 450) });
+  } catch (e) {
+    console.error("chat 70b", String(e && e.message || e));
+    try {
+      return repondre({ reply: await essai("@cf/meta/llama-3.1-8b-instruct-fast", 350) });
+    } catch (e2) {
+      console.error("chat 8b", String(e2 && e2.message || e2));
+    }
+  }
+  return secours();
+}
+
 // worker.js
 async function logiciel(env, avecSecret, delai) {
   try {
@@ -2438,6 +2554,7 @@ var worker_default = {
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
     if (/^\/sejour(\/|$)/.test(url.pathname)) return routeSejour(request, env, url);
     if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
+    if (url.pathname === "/api/chat" && request.method === "POST") return routeChat(request, env, ctx);
     if (url.pathname === "/api/availability" && request.method === "GET") {
       const [orig, soft] = await Promise.all([env.API.fetch(request), logiciel(env)]);
       if (!soft || !orig.ok) return orig;

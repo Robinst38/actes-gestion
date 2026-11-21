@@ -421,6 +421,43 @@ Deno.serve(async (req) => {
       // Mode maintenance du site (visible seulement avec le code d'accès) — jamais envoyé sans le secret
       const ent = await entreprise(sb).catch(() => ({} as any));
       out.maintenance = { actif: !!cfg.siteMaintenance, code: String(cfg.siteCodeApercu || "").trim(), contact: String(ent.email || "").trim() };
+
+      // Connaissances de l'assistant du site (chat) : uniquement des informations publiques.
+      // Jamais : Wi-Fi, consignes d'arrivée (codes, boîte à clés), rubriques du livret « Le chalet » / « Sécurité », noms des clients.
+      const c = config(cfg);
+      const propreTxt = (t: unknown) => String(t || "").split("\n").filter((l) => !/\[à compléter|\[heure|wi-?fi|code|cl[ée]s?\b|bo[iî]te/i.test(l)).join("\n").trim();
+      const periodes: string[] = [];
+      const fin12 = addD(t, 400);
+      for (const r of resas) {
+        if (!r.debut || !r.fin || ["annulee", "demande"].includes(r.statut) || r.fin < t || r.debut > fin12) continue;
+        periodes.push(r.debut + " → " + r.fin);
+      }
+      for (const p of await lireCollection(sb, "actes_plateformes")) {
+        if (!p.arrivee || !p.depart || /annul/i.test(p.statut || "") || p.depart < t || p.arrivee > fin12) continue;
+        periodes.push(p.arrivee + " → " + p.depart);
+      }
+      for (const b of blocages) {
+        if (!b.debut || !b.fin || b.type === "no_checkin" || b.fin < t || b.debut > fin12) continue;
+        periodes.push(b.debut + " → " + b.fin + " (fermé)");
+      }
+      out.chat = {
+        aujourdhui: t,
+        chalet: c.nomChalet, ville: c.ville, capacite: num(c.capacite) || 24,
+        heureArrivee: c.heureArrivee || "16 h", heureDepart: c.heureDepart || "10 h",
+        nuitsMin: num(c.minNuits) || 2,
+        saisons: (c.saisons || []).filter((s: any) => s && num(s.nuitChalet) > 0).map((s: any) => ({ nom: s.nom || "", du: s.du, au: s.au, nuit: num(s.nuitChalet) })),
+        menage: num(c.menageForfait), adhesion: num(c.adhesionSejour), acomptePct: num(c.acomptePct), soldeJours: num(c.soldeJours), caution: num(c.caution),
+        taxe: c.taxeMode === "pourcentage" ? { pct: num(c.taxePct), plafond: num(c.taxePlafond), majoration: num(c.taxeMajoration) } : { forfait: num(c.taxeSejour) },
+        conditions: c.publierConditions ? texte(c.conditions) : null,
+        reglement: texte(c.reglement),
+        infos: propreTxt(c.infosPratiques),
+        depart: propreTxt(c.consignesDepart),
+        rubriques: (c.livretSections || []).filter((x: any) => x && /autour|commerce|sant|animaux|d[ée]chet|tri|cuisine|chauffage|bienvenue/i.test(String(x.titre || "")))
+          .map((x: any) => ({ titre: String(x.titre), texte: propreTxt(x.texte).slice(0, 1500) })).filter((x: any) => x.texte),
+        activites: String(c.activitesSuggerees || "").split("\n").map((x) => x.trim()).filter(Boolean),
+        occupe: periodes.sort().slice(0, 80),
+        contact: { asso: ent.nom || "A.C.T.E.S", tel: c.telAsso || ent.tel || "", email: String(ent.email || "").trim() },
+      };
     }
     return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
