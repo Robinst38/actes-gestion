@@ -1758,7 +1758,10 @@ ${erreur ? `<div class="msg m-err">Adresse e-mail ou code incorrect. V\xE9rifiez
 <label for="code">Code d'acc\xE8s</label><input type="text" id="code" name="code" required minlength="6" maxlength="8" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" style="letter-spacing:.25em;font-family:ui-monospace,Menlo,monospace;text-transform:uppercase">
 <div class="btns"><button class="btn btn-v" type="submit">Acc\xE9der \xE0 mon s\xE9jour</button></div></form>
 <p class="k" style="margin-top:14px">Code perdu ? R\xE9pondez simplement \xE0 l'e-mail re\xE7u, l'association vous le renverra.</p></section>
-<p style="max-width:520px;text-align:right;margin:-6px 0 0"><a href="/login" title="Acc\xE8s membre (adh\xE9rents de l'association)" aria-label="Acc\xE8s membre" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--gris);text-decoration:none;opacity:.75"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Acc\xE8s membre</a></p>`, { status: erreur ? 401 : 200 });
+<a href="/login" class="acces-membre" title="Acc\xE8s membre (adh\xE9rents de l'association)" style="max-width:520px;display:flex;align-items:center;gap:14px;padding:16px 20px;border:2px solid var(--vert);border-radius:14px;background:#fff;color:var(--vert);text-decoration:none;margin-top:4px">
+<span style="width:46px;height:46px;flex:none;border-radius:12px;background:var(--vert);color:#fff;display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+<span style="flex:1"><b style="display:block;font-size:18px">Acc\xE8s membre</b><span style="font-size:14px;color:var(--gris)">Adh\xE9rents et bureau de l'association : connexion \xE0 l'espace membres</span></span>
+<span aria-hidden="true" style="font-size:22px">\u203A</span></a>`, { status: erreur ? 401 : 200 });
 }
 function joursSejour(debut, fin) {
   const out = [];
