@@ -2151,7 +2151,10 @@ var LIBELLES = {
   en: { sejour: "My stay", sejourLong: "My stay (guests)", membre: "Members" },
   es: { sejour: "Mi estancia", sejourLong: "Mi estancia (clientes)", membre: "Socios" }
 };
-var CSS_ACCES = `<style>.nav-membre{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 12px;border-radius:999px;border:1px dashed currentColor;opacity:.8;text-decoration:none;color:inherit;white-space:nowrap}.nav-membre:hover{opacity:1}@media (max-width:980px){.nav-membre{display:none}}</style>`;
+var CSS_ACCES = `<style>.nav-membre{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 9px;border-radius:999px;border:1px dashed currentColor;opacity:.8;text-decoration:none;color:inherit;white-space:nowrap}.nav-membre:hover{opacity:1}.nav-membre span{display:none}
+@media (min-width:1400px){a.nav-account{display:inline-flex!important;align-items:center;gap:6px}a.nav-account .nav-account-label{display:inline!important}}
+@media (min-width:1720px){.nav-membre span{display:inline}.nav-membre{padding:7px 12px}}
+@media (max-width:980px){.nav-membre{display:none}}</style>`;
 var ICONE_CLE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
 function accesEntete(page2, url) {
   const type = page2.headers.get("content-type") || "";
