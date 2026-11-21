@@ -2052,6 +2052,83 @@ async function pageTarifs(request, env, ctx) {
     el.append(html, { html: true });
   } }).transform(new Response(page2.body, { status: page2.status, headers: h }));
 }
+var LIBRES = [/^\/api\//, /^\/sejour\//, /^\/livret(\/|$)/, /^\/favicon/, /^\/robots\.txt$/];
+var COOKIE = "cb_apercu";
+async function empreinteCode(code, env) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("apercu|" + code + "|" + (env.SITE_SECRET || "")));
+  return Array.from(new Uint8Array(h)).slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function etatMaintenance(env, ctx) {
+  const cache = caches.default;
+  const frais = new Request("https://relais.cache/maintenance-v1");
+  const secours = new Request("https://relais.cache/maintenance-secours-v1");
+  const enCache = await cache.match(frais);
+  if (enCache) return enCache.json();
+  const soft = await logiciel(env, true, 3e3);
+  let etat;
+  if (soft && soft.maintenance) {
+    const m = soft.maintenance;
+    etat = { actif: !!m.actif, jeton: m.code && m.code.length >= 4 ? await empreinteCode(m.code, env) : "" };
+    ctx.waitUntil(cache.put(secours, new Response(JSON.stringify(etat), { headers: { "cache-control": "max-age=604800" } })));
+  } else {
+    const vieux = await cache.match(secours);
+    etat = vieux ? await vieux.json() : { actif: true, jeton: "" };
+  }
+  ctx.waitUntil(cache.put(frais, new Response(JSON.stringify(etat), { headers: { "cache-control": "max-age=60" } })));
+  return etat;
+}
+function lireCookie(request, nom) {
+  const m = (request.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + nom + "=([a-f0-9]+)"));
+  return m ? m[1] : "";
+}
+function pageMaintenance(erreurCode, retour) {
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Chalet Bellevue \u2014 site en pr\xE9paration</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+font-family:Georgia,"Times New Roman",serif;color:#2b2b2b;background:linear-gradient(160deg,#eef3ee 0%,#dfe8e1 100%)}
+.carte{max-width:460px;width:100%;background:#fff;border-radius:18px;padding:40px 32px;box-shadow:0 10px 40px rgba(30,60,40,.12);text-align:center}
+.mont{font-size:44px;line-height:1}h1{font-size:26px;margin:14px 0 6px;font-weight:normal}
+p{font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.6;color:#555;margin:8px 0}
+form{margin-top:26px;padding-top:20px;border-top:1px solid #eee}
+label{display:block;font-family:system-ui,sans-serif;font-size:13px;color:#777;margin-bottom:8px}
+.ligne{display:flex;gap:8px}input{flex:1;min-width:0;font-size:16px;padding:11px 12px;border:1px solid #cdd8cf;border-radius:10px}
+button{font-size:15px;padding:11px 16px;border:0;border-radius:10px;background:#2f5d45;color:#fff;cursor:pointer}
+.err{color:#b91c1c;font-size:13px;margin-top:10px}
+</style></head><body><main class="carte">
+<div class="mont">\u26F0\uFE0F</div><h1>Chalet Bellevue</h1>
+<p>Notre site fait peau neuve et sera bient\xF4t de retour.</p>
+<p>Pour toute demande : association A.C.T.E.S, Bagn\xE8res-de-Luchon.</p>
+<form method="post" action="/__apercu"><label for="c">Acc\xE8s r\xE9serv\xE9</label>
+<input type="hidden" name="retour" value="${esc2(retour)}">
+<div class="ligne"><input id="c" name="code" type="password" autocomplete="current-password" required placeholder="Code d'acc\xE8s"><button>Entrer</button></div>
+${erreurCode ? '<p class="err">Code incorrect.</p>' : ""}</form></main></body></html>`;
+  return new Response(html, { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "86400", "x-robots-tag": "noindex, nofollow" } });
+}
+async function filtreMaintenance(request, env, ctx, url) {
+  if (LIBRES.some((r) => r.test(url.pathname))) return null;
+  const etat = await etatMaintenance(env, ctx);
+  if (!etat.actif) return null;
+  if (url.pathname === "/__apercu" && request.method === "POST") {
+    const f = await request.formData().catch(() => null);
+    const code = f ? String(f.get("code") || "").trim() : "";
+    let retour = f ? String(f.get("retour") || "/") : "/";
+    if (!retour.startsWith("/") || retour.startsWith("//")) retour = "/";
+    if (etat.jeton && code && await empreinteCode(code, env) === etat.jeton) {
+      return new Response(null, { status: 303, headers: {
+        location: retour,
+        "cache-control": "no-store",
+        "set-cookie": `${COOKIE}=${etat.jeton}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax`
+      } });
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    return pageMaintenance(true, retour);
+  }
+  if (etat.jeton && lireCookie(request, COOKIE) === etat.jeton) return null;
+  if (url.pathname === "/robots.txt") return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return new Response("Site en maintenance.", { status: 503 });
+  return pageMaintenance(false, url.pathname + url.search);
+}
 var STATUT_SITE = { option: "pending", confirmee: "confirmed", arrivee: "confirmed", partie: "confirmed", soldee: "confirmed", terminee: "confirmed", annulee: "cancelled" };
 var egal = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
 async function synchroniser(env) {
@@ -2132,6 +2209,8 @@ async function synchroniser(env) {
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const ferme = await filtreMaintenance(request, env, ctx, url);
+    if (ferme) return ferme;
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
     if (url.pathname.startsWith("/sejour/")) return routeSejour(request, env, url);
     if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
@@ -2165,7 +2244,9 @@ var worker_default = {
       }
       return res;
     }
-    return env.API.fetch(request);
+    if (url.pathname.startsWith("/api/")) return env.API.fetch(request);
+    if (url.pathname === "/__apercu") return Response.redirect(url.origin + "/", 303);
+    return fetch(request);
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(synchroniser(env).catch((e) => console.error("synchro en \xE9chec", String(e))));

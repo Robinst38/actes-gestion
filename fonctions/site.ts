@@ -394,6 +394,8 @@ Deno.serve(async (req) => {
         resas: resas.filter((r) => r.siteId).map((r) => ({ siteId: String(r.siteId), statut: r.statut || "demande", paye: paye(r) })),
         infosPratiques: cfg.publierInfos ? texte(cfg.infosPratiques) : null,
       };
+      // Mode maintenance du site (visible seulement avec le code d'accès) — jamais envoyé sans le secret
+      out.maintenance = { actif: !!cfg.siteMaintenance, code: String(cfg.siteCodeApercu || "").trim() };
     }
     return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
