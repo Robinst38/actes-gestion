@@ -371,9 +371,10 @@ Deno.serve(async (req) => {
       if (!p.arrivee || !p.depart || /annul/i.test(p.statut || "")) continue;
       nuits(p.arrivee, p.depart, blocked, depuis);
     }
-    // Dates bloquées dans le logiciel (travaux, entretien…) ; celles venues du site y sont déjà
-    for (const b of await lireCollection(sb, "chalet_blocages")) {
-      if (!b.debut || !b.fin || b.source === "site" || b.type === "no_checkin") continue;
+    // Dates bloquées (travaux, entretien…) : fermées tout de suite, avant même la synchro avec le site
+    const blocages = await lireCollection(sb, "chalet_blocages");
+    for (const b of blocages) {
+      if (!b.debut || !b.fin || b.type === "no_checkin") continue;
       nuits(b.debut, b.fin, blocked, depuis);
     }
     const cfg = (await lireDoc(sb, "chalet_config", "main")) || {};
@@ -398,6 +399,12 @@ Deno.serve(async (req) => {
       out.sync = {
         resas: resas.filter((r) => r.siteId).map((r) => ({ siteId: String(r.siteId), statut: r.statut || "demande", paye: paye(r) })),
         infosPratiques: cfg.publierInfos ? texte(cfg.infosPratiques) : null,
+        // Toutes les dates bloquées à venir, jour par jour (le relais les compare à celles du site)
+        blocages: blocages.filter((b: any) => b.debut && b.fin && b.fin > depuis).flatMap((b: any) => {
+          const out: any[] = [];
+          for (let d = b.debut; d < b.fin && out.length < 800; d = addD(d, 1)) if (d >= depuis) out.push({ date: d, type: b.type === "no_checkin" ? "no_checkin" : "blocked", reason: b.motif || "" });
+          return out;
+        }),
       };
       // Mode maintenance du site (visible seulement avec le code d'accès) — jamais envoyé sans le secret
       out.maintenance = { actif: !!cfg.siteMaintenance, code: String(cfg.siteCodeApercu || "").trim() };
@@ -427,7 +434,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, faits });
     }
 
-    // Dates bloquées dans l'admin du site (travaux, entretien…) → agenda du logiciel (collection chalet_blocages)
+    // Dates bloquées après synchro site ↔ logiciel (le relais envoie la liste complète à venir) → collection chalet_blocages
     if (b.action === "blocages") {
       const dates = (Array.isArray(b.dates) ? b.dates : []).filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(d && d.date)))
         .map((d: any) => ({ date: String(d.date), type: d.type === "no_checkin" ? "no_checkin" : "blocked", motif: String(d.reason || "").slice(0, 200) }))
@@ -439,22 +446,24 @@ Deno.serve(async (req) => {
         else periodes.push({ debut: d.date, fin: addD(d.date, 1), type: d.type, motif: d.motif });
       }
       const depuis = String(b.depuis || addD(auj(), -1));
+      const existants = await lireCollection(sb, "chalet_blocages");
       const garder = new Set<string>();
+      let ecrits = 0, retires = 0;
       for (const p of periodes) {
-        const id = "site_" + p.debut + "_" + p.type;
+        // garde l'identifiant d'une période identique déjà connue (sinon nouvel identifiant)
+        const ex = existants.find((x: any) => !garder.has(x.id) && x.fin === p.fin && x.type === p.type && (x.motif || "") === p.motif && (x.debut === p.debut || (x.debut < depuis && p.debut === depuis)));
+        if (ex) { garder.add(ex.id); continue; }
+        const id = "b_" + p.debut + "_" + p.type;
         garder.add(id);
-        const ex = await lireDoc(sb, "chalet_blocages", id);
-        if (!ex || ex.fin !== p.fin || ex.motif !== p.motif) {
-          await ecrireDoc(sb, "chalet_blocages", id, { id, ...p, source: "site", majLe: new Date().toISOString() });
-        }
+        await ecrireDoc(sb, "chalet_blocages", id, { id, ...p, majLe: new Date().toISOString() });
+        ecrits++;
       }
-      let retires = 0;
-      for (const ex of await lireCollection(sb, "chalet_blocages")) {
-        if (ex.source !== "site" || garder.has(ex.id) || String(ex.fin || "") <= depuis) continue;
+      for (const ex of existants) {
+        if (garder.has(ex.id) || String(ex.fin || "") <= depuis) continue;
         await sb.from("documents").delete().eq("collection", "chalet_blocages").eq("id", ex.id);
         retires++;
       }
-      return json({ ok: true, periodes: periodes.length, retires });
+      return json({ ok: true, periodes: periodes.length, ecrits, retires });
     }
 
     if (!b.checkIn || !b.checkOut) return erreur("Demande incomplète.");

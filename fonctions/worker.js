@@ -2148,6 +2148,56 @@ async function filtreMaintenance(request, env, ctx, url) {
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Site en maintenance.", { status: 503 });
   return pageMaintenance(false, url.pathname + url.search);
 }
+var cleDate = (v) => JSON.stringify([v.type === "no_checkin" ? "no_checkin" : "blocked", String(v.reason || "")]);
+async function synchroBlocages(env, soft, DB) {
+  if (!soft.sync || !Array.isArray(soft.sync.blocages)) return 0;
+  const hier = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const site = new Map(((await DB.prepare("SELECT date, type, reason FROM blocked_dates WHERE date >= ?").bind(hier).all()).results || []).map((d) => [d.date, cleDate(d)]));
+  const logi = new Map(soft.sync.blocages.filter((d) => d && d.date >= hier).map((d) => [d.date, cleDate(d)]));
+  const ligne = await DB.prepare("SELECT value FROM site_content WHERE key = 'relais_blocages'").first();
+  let avant = null;
+  try {
+    if (ligne && ligne.value) avant = new Map(Object.entries(JSON.parse(ligne.value)).filter(([d]) => d >= hier));
+  } catch (e) {
+    avant = null;
+  }
+  const final = /* @__PURE__ */ new Map();
+  for (const d of /* @__PURE__ */ new Set([...site.keys(), ...logi.keys(), ...avant ? avant.keys() : []])) {
+    const s1 = site.get(d), l1 = logi.get(d), a1 = avant ? avant.get(d) : void 0;
+    if (a1 !== void 0) {
+      if (s1 === void 0 || l1 === void 0) continue;
+      final.set(d, l1 !== a1 ? l1 : s1);
+    } else if (s1 !== void 0 || l1 !== void 0) {
+      final.set(d, l1 !== void 0 ? l1 : s1);
+    }
+  }
+  let changements = 0;
+  const req = [];
+  for (const d of site.keys()) if (!final.has(d)) req.push(DB.prepare("DELETE FROM blocked_dates WHERE date = ?").bind(d));
+  for (const [d, v] of final) {
+    if (site.get(d) === v) continue;
+    const [type, reason] = JSON.parse(v);
+    req.push(DB.prepare("INSERT INTO blocked_dates (date, type, reason) VALUES (?, ?, ?) ON CONFLICT(date) DO UPDATE SET type = excluded.type, reason = excluded.reason").bind(d, type, reason || null));
+  }
+  if (req.length) {
+    await DB.batch(req);
+    changements += req.length;
+  }
+  const identique = logi.size === final.size && [...final].every(([d, v]) => logi.get(d) === v);
+  if (!identique) {
+    const dates = [...final].sort().map(([date, v]) => {
+      const [type, reason] = JSON.parse(v);
+      return { date, type, reason };
+    });
+    await versLogiciel(env, { action: "blocages", dates, depuis: hier });
+    changements++;
+  }
+  const val = JSON.stringify(Object.fromEntries([...final].sort()));
+  if (!ligne || ligne.value !== val) {
+    await DB.prepare("INSERT INTO site_content (key, value, updated_at) VALUES ('relais_blocages', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(val, (/* @__PURE__ */ new Date()).toISOString()).run();
+  }
+  return changements;
+}
 var STATUT_SITE = { option: "pending", confirmee: "confirmed", arrivee: "confirmed", partie: "confirmed", soldee: "confirmed", terminee: "confirmed", annulee: "cancelled" };
 var egal = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
 async function synchroniser(env) {
@@ -2233,18 +2283,10 @@ async function synchroniser(env) {
     }
   }
   try {
-    const hier = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-    const dates = (await DB.prepare("SELECT date, type, reason FROM blocked_dates WHERE date >= ? ORDER BY date").bind(hier).all()).results || [];
-    const signature = JSON.stringify(dates);
-    const cle = new Request("https://relais.cache/blocages-v1");
-    const vu = await caches.default.match(cle);
-    if (!vu || await vu.text() !== signature) {
-      await versLogiciel(env, { action: "blocages", dates, depuis: hier });
-      await caches.default.put(cle, new Response(signature, { headers: { "cache-control": "max-age=3600" } }));
-      bilan.blocages = dates.length;
-    }
+    const n = await synchroBlocages(env, soft, DB);
+    if (n) bilan.blocages = n;
   } catch (e) {
-    console.error("blocages : envoi au logiciel impossible", String(e));
+    console.error("blocages : synchro impossible", String(e));
   }
   if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos || bilan.blocages !== void 0 || bilan.maintenance !== void 0) console.log("synchro", JSON.stringify(bilan));
 }
