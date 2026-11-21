@@ -1,6 +1,6 @@
 /* Service worker : l'appli s'ouvre instantanément et reste affichable sans réseau.
    Les données (Supabase) ne sont jamais mises en cache ici. */
-const VERSION = "blocages-20261121";
+const VERSION = "maint1clic-20261121";
 const CACHE = "actes-" + VERSION;
 const COQUILLE = ["./", "index.html", "app.css", "config.js", "supabase.js", "591.supabase.js", "claude-shim.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
