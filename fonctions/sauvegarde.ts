@@ -87,11 +87,91 @@ async function tout(sb: any, table: string, colonnes: string, ordre: string[]) {
   }
 }
 
+// ----- Factures à ranger dans Google Drive -----
+// Le script Google de l'association (sauvegarde-drive.gs › envoyerFactures, chaque heure) demande les factures
+// pas encore rangées, les dépose dans Drive (Trésorerie & comptabilité › Factures reçues › année › mois),
+// puis signale ici ce qui est fait. Gratuit : aucun service extérieur, le script tourne sur le compte Google de l'association.
+//   GET  ?factures=1  → { factures: [{ cle, date, nom, pages: [dataURL…] }], reste }
+//   POST ?factures=1  { faits: [{ cle, driveId, driveUrl }] } → marque les factures comme rangées
+// Sources : le Scanner (catégories « Facture fournisseur » et « Ticket / reçu ») et les justificatifs joints aux dépenses.
+const CATS_FACTURES = ["Facture fournisseur", "Ticket / reçu"];
+const LOT_MAX_OCTETS = 12 * 1024 * 1024;
+const propreNom = (t: unknown) => String(t || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 90);
+const eurNom = (m: unknown) => { const n = Number(String(m ?? "").replace(",", ".")); return isFinite(n) && n > 0 ? " – " + n.toFixed(2).replace(".", ",") + " €" : ""; };
+
+async function facturesARanger(sb: any) {
+  const docs = await tout(sb, "documents", "collection,id,data", ["collection", "id"]);
+  const parCol = (c: string) => docs.filter((d: any) => d.collection === c);
+  // Les dépenses (achats) qui portent un justificatif : pour nommer le fichier avec le libellé et le montant.
+  const achats = new Map<string, any>();
+  for (const d of docs) {
+    const lst = (d.data && (d.data.achats || (d.data.data && d.data.data.achats))) || [];
+    if (Array.isArray(lst)) for (const a of lst) if (a && a.pieceId) achats.set(String(a.pieceId), a);
+  }
+  const att: any[] = [];
+  for (const d of parCol("crm_scans")) {
+    const m = d.data || {};
+    if (m.driveId || !CATS_FACTURES.includes(m.categorie) || !Array.isArray(m.pages) || !m.pages.length) continue;
+    att.push({ cle: "scan:" + d.id, date: String(m.date || "").slice(0, 10), nom: propreNom(m.titre || m.categorie), source: "scan", m });
+  }
+  for (const d of parCol("crm_achat_pj")) {
+    const m = d.data || {};
+    if (m.driveId) continue;
+    const a = achats.get(String(d.id)) || {};
+    const lib = [a.fournisseur, a.libelle].filter(Boolean).join(" – ") || String(m.nom || "").replace(/\.[a-z0-9]{2,4}$/i, "") || "Justificatif de dépense";
+    att.push({ cle: "pj:" + d.id, date: String(a.dateAchat || m.date || "").slice(0, 10), nom: propreNom(lib) + eurNom(a.montant), source: "pj", m });
+  }
+  att.sort((x, y) => (x.date || "").localeCompare(y.date || ""));
+  const pages = new Map(parCol("crm_scan_pages").map((d: any) => [d.id, d.data && d.data.img]));
+  const parts = new Map(parCol("crm_achat_pj_parts").map((d: any) => [d.id, d.data && d.data.d]));
+  const lot: any[] = [];
+  let poids = 0;
+  for (const f of att) {
+    let contenu: string[] = [];
+    if (f.source === "scan") contenu = f.m.pages.map((pid: string) => pages.get(pid)).filter(Boolean);
+    else {
+      let t = "";
+      for (let k = 0; k < Number(f.m.n || 0); k++) { const x = parts.get(f.m.id + "_" + k) ?? parts.get(String(f.cle).slice(3) + "_" + k); if (x == null) { t = ""; break; } t += x; }
+      if (t) contenu = [t];
+    }
+    if (!contenu.length || contenu.some((x) => !/^data:(image\/(jpeg|png|webp)|application\/pdf);base64,/.test(x))) continue; // incomplet : réessayé plus tard
+    const taille = contenu.reduce((n, x) => n + x.length, 0);
+    if (lot.length && poids + taille > LOT_MAX_OCTETS) break;
+    poids += taille;
+    lot.push({ cle: f.cle, date: f.date || new Date().toISOString().slice(0, 10), nom: f.nom, pages: contenu });
+  }
+  return { factures: lot, reste: Math.max(0, att.length - lot.length) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "GET") return erreur("Méthode non prise en charge.", 405);
   const secret = Deno.env.get("BACKUP_SECRET");
   const parSecret = !!secret && req.headers.get("x-backup-secret") === secret;
+  const url = new URL(req.url);
+  if (url.searchParams.get("factures")) {
+    if (!parSecret) return erreur("Non autorisé.", 401);
+    const sb = admin();
+    try {
+      if (req.method === "GET") return json(await facturesARanger(sb));
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        let n = 0;
+        for (const f of (Array.isArray(b.faits) ? b.faits : []).slice(0, 50)) {
+          const m = /^(scan|pj):([\w-]{1,80})$/.exec(String(f && f.cle || ""));
+          if (!m || !/^[\w-]{10,}$/.test(String(f.driveId || ""))) continue;
+          const col = m[1] === "scan" ? "crm_scans" : "crm_achat_pj";
+          if (!(await lireDoc(sb, col, m[2]))) continue;
+          await fusionDoc(sb, col, m[2], { driveId: String(f.driveId), driveUrl: String(f.driveUrl || "").slice(0, 300), driveLe: new Date().toISOString() });
+          n++;
+        }
+        return json({ ok: true, marques: n });
+      }
+      return erreur("Méthode non prise en charge.", 405);
+    } catch (e) {
+      return erreur("Factures : " + String((e as Error).message || e), 500);
+    }
+  }
+  if (req.method !== "GET") return erreur("Méthode non prise en charge.", 405);
   if (!parSecret && !(await autoriser(req, ["admin"]))) return erreur("Non autorisé.", 401);
   try {
     const sb = admin();
