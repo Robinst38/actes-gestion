@@ -99,8 +99,19 @@ const LOT_MAX_OCTETS = 12 * 1024 * 1024;
 const propreNom = (t: unknown) => String(t || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 90);
 const eurNom = (m: unknown) => { const n = Number(String(m ?? "").replace(",", ".")); return isFinite(n) && n > 0 ? " – " + n.toFixed(2).replace(".", ",") + " €" : ""; };
 
+/** Lecture ciblée (la mémoire et le temps de calcul d'une fonction sont limités) : jamais les images en bloc. */
+async function lignes(sb: any, filtre: (q: any) => any) {
+  const out: any[] = [];
+  for (let de = 0; ; de += 500) {
+    const { data, error } = await filtre(sb.from("documents").select("collection,id,data")).order("collection").order("id").range(de, de + 499);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+    if (!data || data.length < 500) return out;
+  }
+}
 async function facturesARanger(sb: any) {
-  const docs = await tout(sb, "documents", "collection,id,data", ["collection", "id"]);
+  // Fiches seulement (scans, justificatifs, et documents qui portent des dépenses) ; les pages et morceaux d'images sont lus à la demande.
+  const docs = await lignes(sb, (q) => q.not("collection", "in", "(crm_scan_pages,crm_achat_pj_parts)"));
   const parCol = (c: string) => docs.filter((d: any) => d.collection === c);
   // Les dépenses (achats) qui portent un justificatif : pour nommer le fichier avec le libellé et le montant.
   const achats = new Map<string, any>();
@@ -122,16 +133,22 @@ async function facturesARanger(sb: any) {
     att.push({ cle: "pj:" + d.id, date: String(a.dateAchat || m.date || "").slice(0, 10), nom: propreNom(lib) + eurNom(a.montant), source: "pj", m });
   }
   att.sort((x, y) => (x.date || "").localeCompare(y.date || ""));
-  const pages = new Map(parCol("crm_scan_pages").map((d: any) => [d.id, d.data && d.data.img]));
-  const parts = new Map(parCol("crm_achat_pj_parts").map((d: any) => [d.id, d.data && d.data.d]));
   const lot: any[] = [];
   let poids = 0;
-  for (const f of att) {
+  for (const f of att.slice(0, 40)) {
     let contenu: string[] = [];
-    if (f.source === "scan") contenu = f.m.pages.map((pid: string) => pages.get(pid)).filter(Boolean);
-    else {
+    if (f.source === "scan") {
+      const ids = f.m.pages.map(String).slice(0, 30);
+      const rows = await lignes(sb, (q) => q.eq("collection", "crm_scan_pages").in("id", ids));
+      const pages = new Map(rows.map((d: any) => [d.id, d.data && d.data.img]));
+      contenu = ids.map((pid: string) => pages.get(pid)).filter(Boolean);
+      if (contenu.length !== ids.length) contenu = [];
+    } else {
+      const id = String(f.cle).slice(3), n = Math.min(60, Number(f.m.n || 0));
+      const rows = await lignes(sb, (q) => q.eq("collection", "crm_achat_pj_parts").in("id", Array.from({ length: n }, (_, k) => id + "_" + k)));
+      const parts = new Map(rows.map((d: any) => [d.id, d.data && d.data.d]));
       let t = "";
-      for (let k = 0; k < Number(f.m.n || 0); k++) { const x = parts.get(f.m.id + "_" + k) ?? parts.get(String(f.cle).slice(3) + "_" + k); if (x == null) { t = ""; break; } t += x; }
+      for (let k = 0; k < n; k++) { const x = parts.get(id + "_" + k); if (x == null) { t = ""; break; } t += x; }
       if (t) contenu = [t];
     }
     if (!contenu.length || contenu.some((x) => !/^data:(image\/(jpeg|png|webp)|application\/pdf);base64,/.test(x))) continue; // incomplet : réessayé plus tard
