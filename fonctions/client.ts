@@ -536,40 +536,17 @@ async function jetonDepot() {
 }
 const lienDepot = async (ancre = "") => URL_SITE + "/equipe/documents?k=" + (await jetonDepot()) + (ancre ? "#" + ancre : "");
 
-/** Vérification automatique d'un document scanné (lisible, bon document, signé, complété) avec l'API Claude.
- *  Sans clé ANTHROPIC_API_KEY ou en cas d'erreur, le document part en vérification par l'équipe. */
-async function verifierScan(d: any, r: any, type: string, b64: string): Promise<{ ok: boolean; problemes: string[]; auto: boolean }> {
-  const cle = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!cle) return { ok: false, problemes: ["Vérification automatique non configurée"], auto: false };
-  const piece = type === "application/pdf"
-    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
-    : { type: "image", source: { type: "base64", media_type: type, data: b64 } };
-  const champs = d.champs.length ? " Les champs suivants doivent être remplis à la main : " + d.champs.map((c: any) => c.lib).join(" ; ") + "." : "";
-  const consigne = "Tu contrôles un document scanné ou photographié, renvoyé par un client de l'association A.C.T.E.S. pour une réservation du Chalet Bellevue."
-    + " Document attendu : « " + d.titre + " ». Réservation au nom de : " + (r.groupe || "") + " " + (r.contact || "") + ", du " + fd(r.debut) + " au " + fd(r.fin) + "."
-    + " Vérifie : (1) le document est lisible en entier (pas flou, pas coupé, pages présentes) ; (2) c'est bien le document attendu ; (3) il porte une signature manuscrite ; (4) le lieu et la date de signature sont remplis." + champs
-    + " Réponds uniquement avec un objet JSON : {\"lisible\":bool,\"bonDocument\":bool,\"signe\":bool,\"dateEtLieu\":bool,\"champsRemplis\":bool,\"problemes\":[\"phrases courtes en français, vides si tout est conforme\"]}.";
-  try {
-    const rep = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", signal: AbortSignal.timeout(30e3),
-      headers: { "x-api-key": cle, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: Deno.env.get("IA_MODEL") || "claude-haiku-5-5", max_tokens: 600, messages: [{ role: "user", content: [piece, { type: "text", text: consigne }] }] }),
-    });
-    const j = await rep.json().catch(() => ({}));
-    if (!rep.ok) throw new Error(j?.error?.message || String(rep.status));
-    const texte = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-    const m = texte.match(/\{[\s\S]*\}/);
-    const v = m ? JSON.parse(m[0]) : null;
-    if (!v) throw new Error("réponse illisible");
-    const problemes = (Array.isArray(v.problemes) ? v.problemes : []).map((x: unknown) => String(x).slice(0, 200)).filter(Boolean).slice(0, 6);
-    const ok = v.lisible === true && v.bonDocument === true && v.signe === true && v.dateEtLieu === true && (v.champsRemplis === true || !d.champs.length) && !problemes.length;
-    if (!ok && !problemes.length) problemes.push("Document à contrôler (signature, date ou champs non reconnus)");
-    return { ok, problemes, auto: true };
-  } catch (e) {
-    console.error("vérification document", String((e as Error).message || e));
-    return { ok: false, problemes: ["La vérification automatique n'a pas abouti"], auto: false };
-  }
+/** Vérification automatique des scans par l'IA gratuite de Cloudflare (faite par le relais du site) :
+ *  plafond de pages par jour pour rester très loin du quota gratuit de Workers AI (partagé avec le chat du site). */
+const QUOTA_IA_PAGES_JOUR = 40;
+async function reserverQuotaIA(sb: any, n: number) {
+  const jour = auj(), c = (await lireDoc(sb, "chalet_ia", "compteur")) || {};
+  const deja = c.jour === jour ? num(c.pages) : 0;
+  if (deja + n > QUOTA_IA_PAGES_JOUR) return false;
+  await ecrireDoc(sb, "chalet_ia", "compteur", { jour, pages: deja + n });
+  return true;
 }
+
 const docsComplets = (r: any) => { const s = docsSignes(r); return DOCS_RESA.every((d) => !!s[d.id]); };
 const texteDoc = (d: any, cfg: any) => d.id === "utilisation" && cfg.reglement ? d.texte + "\n\n## Règlement intérieur\n\n" + String(cfg.reglement) : d.texte;
 const EXT_SCAN: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
@@ -683,8 +660,8 @@ Deno.serve(async (req) => {
               const brut = (x.documentsSignes || {})[d.id] || (d.id === "utilisation" && x.contratAccepte ? { mode: "electronique", nom: x.contratAccepte.nom, le: x.contratAccepte.le, statut: "valide" } : null);
               if (!brut) return { id: d.id, titre: d.titre, statut: "manquant" };
               return { id: d.id, titre: d.titre, statut: brut.statut === "refuse" ? "refuse" : statutDoc(brut), mode: brut.mode, le: brut.le, nom: brut.nom || "",
-                fichier: brut.fichier ? brut.fichier.nom : "", stocke: !!(brut.fichier && brut.fichier.chemin), champs: brut.champs || null,
-                problemes: brut.verif ? brut.verif.problemes || [] : [], auto: !!(brut.verif && brut.verif.auto && brut.verif.ok),
+                fichier: brut.fichier ? brut.fichier.nom : "", stocke: !!(brut.fichier && brut.fichier.chemin), pages: (brut.fichiers || (brut.fichier ? [brut.fichier] : [])).map((f: any) => !!f.chemin),
+                problemes: brut.verif ? brut.verif.problemes || [] : [], auto: !!(brut.verif && brut.verif.ok), champs: brut.champs || null,
                 valideur: brut.validePar || "", motif: brut.refus ? brut.refus.motif : "" };
             }),
           }));
@@ -695,8 +672,9 @@ Deno.serve(async (req) => {
       if (!r || !d) return erreur("Document introuvable.", 404);
       const rec = (r.documentsSignes || {})[d.id];
       if (b.action === "depot-fichier") {
-        if (!rec || !rec.fichier || !rec.fichier.chemin) return erreur("Aucun fichier rangé pour ce document (voir l'e-mail reçu).", 404);
-        const { data, error } = await sb.storage.from(BUCKET_DOCS).createSignedUrl(rec.fichier.chemin, 600);
+        const fic = rec && (rec.fichiers || (rec.fichier ? [rec.fichier] : []))[Math.max(0, Math.floor(num(b.page)))];
+        if (!fic || !fic.chemin) return erreur("Aucun fichier rangé pour ce document (voir l'e-mail reçu).", 404);
+        const { data, error } = await sb.storage.from(BUCKET_DOCS).createSignedUrl(fic.chemin, 600);
         if (error || !data) return erreur("Le fichier n'a pas pu être ouvert.", 502);
         return json({ url: data.signedUrl });
       }
@@ -839,6 +817,14 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // Avant un dépôt : le relais demande s'il peut faire vérifier les pages par l'IA de Cloudflare (quota du jour) et ce qu'il faut contrôler.
+    if (b.action === "pre-verif") {
+      const d = DOCS_RESA.find((x) => x.id === b.doc);
+      const n = Math.floor(num(b.pages));
+      if (!d || n < 1 || n > 6 || docsSignes(r)[d.id]) return json({ autorise: false });
+      return json({ autorise: await reserverQuotaIA(sb, n), titre: d.titre, champs: d.champs.map((c) => c.lib) });
+    }
+
     // Dépôt du document imprimé, signé et scanné (PDF, JPG ou PNG, 8 Mo au plus) : rangé dans le stockage privé
     // « documents-signes » et envoyé en pièce jointe au bureau.
     if (b.action === "deposer") {
@@ -846,40 +832,59 @@ Deno.serve(async (req) => {
       if (!d) return erreur("Document inconnu.");
       const s = docsSignes(r);
       if (s[d.id]) return json({ ok: true, deja: true });
-      const type = String(b.type || "").toLowerCase(), ext = EXT_SCAN[type];
-      if (!ext) return erreur("Format accepté : PDF, JPG ou PNG.");
-      const b64 = String(b.contenu || "");
-      let octets: Uint8Array;
-      try { octets = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); } catch { return erreur("Le fichier n'a pas pu être lu."); }
-      if (octets.length < 1000) return erreur("Le fichier semble vide.");
-      if (octets.length > 8 * 1024 * 1024) return erreur("Le fichier dépasse 8 Mo : merci de l'alléger (scan en noir et blanc ou en PDF).");
-      const nomFichier = String(b.nom || d.id + "." + ext).replace(/[^\w.\- ()À-ÿ]/g, "_").slice(0, 120);
+      // Un ou plusieurs fichiers (un PDF, ou une photo par page) : 6 au plus, 8 Mo en tout.
+      const brut: any[] = Array.isArray(b.fichiers) ? b.fichiers : [{ nom: b.nom, type: b.type, contenu: b.contenu }];
+      if (!brut.length) return erreur("Merci de choisir le fichier du document signé.");
+      if (brut.length > 6) return erreur("6 fichiers au plus par document (une photo par page, ou un seul PDF).");
+      const pages: { nom: string; type: string; ext: string; b64: string; octets: Uint8Array; chemin: string; stocke: boolean }[] = [];
       const le = new Date().toISOString();
-      const chemin = String(r.id) + "/" + d.id + "-" + le.replace(/[:.]/g, "-") + "." + ext;
-      let stocke = false;
-      try {
-        await sb.storage.createBucket(BUCKET_DOCS, { public: false }).catch(() => null);
-        const { error } = await sb.storage.from(BUCKET_DOCS).upload(chemin, octets, { contentType: type, upsert: false });
-        stocke = !error;
-        if (error) console.error("stockage document signé", error.message);
-      } catch (e) { console.error("stockage document signé", String((e as Error).message || e)); }
-      // Contrôle automatique : conforme → validé ; sinon → à vérifier par l'équipe (e-mail avec le fichier et le lien du dépôt).
-      const v = await verifierScan(d, r, type, b64);
-      const statut = v.ok ? "valide" : "a_verifier";
+      for (let i = 0; i < brut.length; i++) {
+        const x = brut[i] || {};
+        const type = String(x.type || "").toLowerCase(), ext = EXT_SCAN[type];
+        if (!ext) return erreur("Format accepté : PDF, JPG ou PNG.");
+        const b64 = String(x.contenu || "");
+        let octets: Uint8Array;
+        try { octets = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); } catch { return erreur("Un des fichiers n'a pas pu être lu."); }
+        if (octets.length < 1000) return erreur("Un des fichiers semble vide.");
+        const nom = String(x.nom || d.id + "-" + (i + 1) + "." + ext).replace(/[^\w.\- ()À-ÿ]/g, "_").slice(0, 120);
+        pages.push({ nom, type, ext, b64, octets, chemin: String(r.id) + "/" + d.id + "-" + le.replace(/[:.]/g, "-") + "-" + (i + 1) + "." + ext, stocke: false });
+      }
+      const totalOct = pages.reduce((t, p) => t + p.octets.length, 0);
+      if (totalOct > 8 * 1024 * 1024) return erreur("Les fichiers dépassent 8 Mo en tout : merci de les alléger (photos moins lourdes, scan en noir et blanc ou en PDF).");
+      await sb.storage.createBucket(BUCKET_DOCS, { public: false }).catch(() => null);
+      for (const p of pages) {
+        try {
+          const { error } = await sb.storage.from(BUCKET_DOCS).upload(p.chemin, p.octets, { contentType: p.type, upsert: false });
+          p.stocke = !error;
+          if (error) console.error("stockage document signé", error.message);
+        } catch (e) { console.error("stockage document signé", String((e as Error).message || e)); }
+      }
+      const stocke = pages.every((p) => p.stocke);
+      const nomFichier = pages[0].nom + (pages.length > 1 ? " (+" + (pages.length - 1) + ")" : "");
+      // Tout document scanné est vérifié par l'équipe (lisible, complet, signé) dans le dépôt des documents :
+      // e-mail au bureau avec le fichier et le lien du dépôt. Aucun service payant n'est utilisé.
+      // Résultat de la vérification automatique faite par le relais (IA gratuite de Cloudflare) : conforme → validé,
+      // sinon (ou PDF, ou quota du jour atteint) → à vérifier par l'équipe.
+      const vb = b.verif && typeof b.verif === "object" ? b.verif : null;
+      const verif = { auto: !!(vb && vb.auto), ok: !!(vb && vb.auto && vb.ok === true), le,
+        problemes: (vb && Array.isArray(vb.problemes) ? vb.problemes : []).map((x: unknown) => String(x).replace(/[\u0000-\u001f]/g, " ").slice(0, 200)).filter(Boolean).slice(0, 8) };
+      const statut = verif.ok ? "valide" : "a_verifier";
       let envoye = false;
       const dest = smtpConfigure() ? Deno.env.get("SMTP_USER") : "";
       if (dest) {
         const qui = (r.groupe || r.contact || "réservation");
         await envoyer({ to: dest,
-          subject: (v.ok ? "Document signé reçu et validé : " : "À vérifier : document signé reçu — ") + d.titre + " — " + qui,
+          subject: (verif.ok ? "Document signé reçu et validé : " : "À vérifier : document signé reçu — ") + d.titre + " — " + qui,
           body: "Bonjour,\n\nLe document « " + d.titre + " » signé et scanné vient d'être déposé dans l'espace séjour de " + qui + " (séjour du " + fd(r.debut) + " au " + fd(r.fin) + ").\n\n"
-            + (v.ok ? "La vérification automatique l'a trouvé lisible, signé et complet : il est validé. Vous pouvez le consulter dans le dépôt des documents si besoin."
-              : "Il n'a pas pu être validé automatiquement :\n" + v.problemes.map((x) => "• " + x).join("\n") + "\n\nMerci de le vérifier dans le dépôt des documents, puis de le valider ou de le refuser (le client recevra alors un e-mail pour le renvoyer).")
-            + "\n\nDépôt des documents : " + (await lienDepot("r-" + r.id)) + "\n\nLe fichier est en pièce jointe" + (stocke ? "." : " (il n'a pas pu être rangé dans le stockage).") + "\n\nLe logiciel A.C.T.E.S",
-          attachments: [{ filename: nomFichier, content: b64, mimeType: type }] }).then(() => { envoye = true; }).catch((e) => console.error("envoi document signé", String(e)));
+            + (verif.ok ? "La vérification automatique l'a trouvé lisible, signé et complet : il est validé. Vous pouvez le revoir (et le refuser si besoin) dans le dépôt des documents."
+              : (verif.problemes.length ? "Points relevés par la vérification automatique :\n" + verif.problemes.map((x) => "• " + x).join("\n") + "\n\n" : "")
+            + "Merci de vérifier qu'il est lisible, complet et signé" + (d.champs.length ? " (" + d.champs.map((c: any) => c.lib.toLowerCase()).join(", ") + " remplis)" : "") + ", puis de le valider ou de le refuser dans le dépôt des documents. En cas de refus, le client reçoit un e-mail pour le renvoyer.")
+            + "\n\nDépôt des documents : " + (await lienDepot("r-" + r.id)) + "\n\n" + (pages.length > 1 ? "Les " + pages.length + " fichiers sont en pièces jointes" : "Le fichier est en pièce jointe") + (stocke ? "." : " (rangement dans le stockage incomplet).") + "\n\nLe logiciel A.C.T.E.S",
+          attachments: pages.map((p) => ({ filename: p.nom, content: p.b64, mimeType: p.type })) }).then(() => { envoye = true; }).catch((e) => console.error("envoi document signé", String(e)));
       }
       if (!stocke && !envoye) return erreur("Le document n'a pas pu être enregistré. Merci de réessayer ou de l'envoyer par e-mail à l'association.", 502);
-      const rec = { mode: "scan", statut, verif: { auto: v.auto, ok: v.ok, problemes: v.problemes, le }, le, ip: String(b.ip || "").slice(0, 60), ua: String(b.ua || "").slice(0, 200), fichier: { nom: nomFichier, type, taille: octets.length, chemin: stocke ? chemin : "" } };
+      const rec = { mode: "scan", statut, verif, le, ip: String(b.ip || "").slice(0, 60), ua: String(b.ua || "").slice(0, 200), fichier: { nom: nomFichier, type: pages[0].type, taille: totalOct, chemin: pages[0].stocke ? pages[0].chemin : "" },
+        fichiers: pages.map((p) => ({ nom: p.nom, type: p.type, taille: p.octets.length, chemin: p.stocke ? p.chemin : "" })) };
       await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...(r.documentsSignes || {}), [d.id]: rec }, ...historiqueRefus(r, d.id) });
       await siDocsComplets(sb, r, { ...s, [d.id]: rec });
       return json({ ok: true });
