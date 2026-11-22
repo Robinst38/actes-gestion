@@ -353,6 +353,7 @@ async function verifierPaiements(sb: any, resaId: string, seulement?: string) {
 //   POST {action:"accepter", jeton, nom, ip, ua}        → acceptation du contrat en ligne (horodatée)
 //   POST {action:"payer", jeton, type:"acompte"|"solde"} → lien de paiement HelloAsso
 //   POST {action:"verifier", jeton, intentId}           → vérifie un paiement auprès de HelloAsso et l'enregistre
+//   POST {action:"adhesion", jeton, fiche, signature, ip, ua} → bulletin d'adhésion en ligne d'un nouvel adhérent
 
 
 
@@ -403,6 +404,13 @@ Deno.serve(async (req) => {
       couchage: r.couchage || {},
       programme: r.programme || { taches: [], activites: [] },
       suggestions: String(cfg.activitesSuggerees || "").split("\n").map((x) => x.replace(/^[•\-–*]\s*/, "").trim()).filter(Boolean).slice(0, 30),
+      // Bulletin d'adhésion en ligne (nouvel adhérent) : à remplir une fois par l'adhérent qui réserve
+      adhesion: {
+        aFaire: (r.detailTarif || []).some((l: any) => l.k === "adhesion"),
+        cotisation: num(cfg.adhesionSejour) || 30,
+        fiche: r.adhesionFiche ? { le: r.adhesionFiche.le, nom: r.adhesionFiche.nom, prenom: r.adhesionFiche.prenom } : null,
+        contact: r.contact || "", email: r.email || "", tel: r.tel || "",
+      },
     });
   }
 
@@ -438,6 +446,57 @@ Deno.serve(async (req) => {
       })).filter((x: any) => x.t);
       const programme = { taches: liste((b.programme || {}).taches, false), activites: liste((b.programme || {}).activites, true) };
       await fusionDoc(sb, "crm_actes_resas", r.id, { couchage, programme, espaceMajLe: new Date().toISOString() });
+      return json({ ok: true });
+    }
+
+    // Bulletin d'adhésion en ligne d'un nouvel adhérent : vérifié ici, enregistré sur la réservation
+    // et dans la collection des adhérents (une fiche par adresse e-mail), puis signalé au bureau par e-mail.
+    if (b.action === "adhesion") {
+      if (r.adhesionFiche) return json({ ok: true, deja: true });
+      const t = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+      const f = b.fiche || {};
+      const fiche = {
+        civilite: ["Madame", "Monsieur"].includes(f.civilite) ? f.civilite : "",
+        nom: t(f.nom, 60).toUpperCase(), prenom: t(f.prenom, 60),
+        naissance: /^\d{4}-\d{2}-\d{2}$/.test(String(f.naissance)) ? String(f.naissance) : "",
+        adresse: t(f.adresse, 160), cp: t(f.cp, 10), ville: t(f.ville, 80),
+        tel: t(f.tel, 20), email: t(f.email, 120).toLowerCase(), structure: t(f.structure, 120),
+        source: t(f.source, 40), animal: t(f.animal, 80),
+        droitImage: f.droitImage === true, infosEmail: f.infosEmail === true,
+      };
+      const manque: string[] = [];
+      if (!fiche.civilite) manque.push("la civilité");
+      if (!nomValide(fiche.nom)) manque.push("le nom");
+      if (!nomValide(fiche.prenom)) manque.push("le prénom");
+      if (!fiche.naissance || fiche.naissance > new Date().toISOString().slice(0, 10)) manque.push("la date de naissance");
+      if (fiche.adresse.length < 5) manque.push("l'adresse");
+      if (!/^\d{5}$/.test(fiche.cp)) manque.push("le code postal (5 chiffres)");
+      if (fiche.ville.length < 2) manque.push("la ville");
+      if (fiche.tel.replace(/\D/g, "").length < 10) manque.push("le téléphone");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(fiche.email)) manque.push("l'adresse e-mail");
+      if (manque.length) return erreur("Merci de compléter " + manque.join(", ") + ".");
+      if (f.engagements !== true) return erreur("Merci d'accepter les engagements de l'adhérent.");
+      const signature = t(b.signature, 120);
+      if (signature.length < 2) return erreur("Merci de signer en tapant votre nom et prénom.");
+      const le = new Date().toISOString();
+      const version = await empreinte(String(cfg.reglement));
+      const enreg = { ...fiche, le, annee: le.slice(0, 4), cotisation: num(cfg.adhesionSejour) || 30, resa: String(r.id),
+        signature: { nom: signature, le, ip: t(b.ip, 60), ua: t(b.ua, 200), version } };
+      await fusionDoc(sb, "crm_actes_resas", r.id, { adhesionFiche: enreg });
+      const idAdh = "adh_" + (await empreinte(fiche.email));
+      const ancien = await lireDoc(sb, "crm_adherents", idAdh);
+      await ecrireDoc(sb, "crm_adherents", idAdh, {
+        ...(ancien || {}), ...fiche, id: idAdh, depuis: (ancien && ancien.depuis) || le.slice(0, 10), majLe: le,
+        adhesions: [...((ancien && ancien.adhesions) || []).filter((a: any) => a.resa !== String(r.id)), { annee: enreg.annee, le, resa: String(r.id), cotisation: enreg.cotisation }],
+      });
+      if (smtpConfigure()) {
+        const dest = Deno.env.get("SMTP_USER");
+        if (dest) await envoyer({ to: dest, subject: "Nouvelle adhésion en ligne : " + fiche.prenom + " " + fiche.nom,
+          body: "Bonjour,\n\n" + fiche.civilite + " " + fiche.prenom + " " + fiche.nom + " vient de remplir son bulletin d'adhésion en ligne pour le séjour du " + fd(r.debut) + " au " + fd(r.fin) + ".\n\n"
+            + "Adresse : " + fiche.adresse + ", " + fiche.cp + " " + fiche.ville + "\nTéléphone : " + fiche.tel + "\nE-mail : " + fiche.email + (fiche.structure ? "\nStructure : " + fiche.structure : "")
+            + "\nDroit à l'image : " + (fiche.droitImage ? "autorisé" : "refusé") + "\nInformations par e-mail : " + (fiche.infosEmail ? "oui" : "non")
+            + "\n\nLa fiche est enregistrée dans le logiciel (réservation et liste des adhérents).\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
+      }
       return json({ ok: true });
     }
 

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aperçu adhésion en ligne</title>
+<style>body{margin:0;padding:24px 12px;background:#EFE8DC}</style></head>
+<body>
+<!-- Page d'aperçu seulement : simule un séjour et la réponse du serveur, sans rien enregistrer. -->
+<div id="adhesion"></div>
+<script src="formulaire-adhesion.js"></script>
+<script>
+ActesAdhesion.monter(document.getElementById("adhesion"), {
+  sejour: { asso: "A.C.T.E.S", chalet: "Chalet Bellevue", groupe: "", debut: "2026-12-22", fin: "2026-12-30", personnes: 6,
+    adhesion: { aFaire: true, cotisation: 30, fiche: null, contact: "Marie Dupont", email: "marie.dupont@example.com", tel: "06 12 34 56 78" } },
+  envoyer: function (corps) { console.log(corps); return new Promise(function (ok) { setTimeout(function () { ok({ ok: true }); }, 600); }); },
+});
+</script>
+</body></html>
