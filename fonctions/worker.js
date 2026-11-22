@@ -1896,6 +1896,7 @@ function sectionDocuments(d, base, codeEnvoye) {
   docs.forEach((x, i) => {
     h += `<div class="dsig${x.signe ? " fait" : ""}" id="doc-${esc(x.id)}"><h3><span class="dnum">${x.signe ? "✓" : i + 1}</span>${esc(x.titre)}</h3>`;
     if (x.signe) h += `<p class="msg m-ok" style="margin:0 0 6px">✓ ${x.signe.mode === "email" ? "Document sign\xE9 re\xE7u par l'association" : "Sign\xE9 en ligne par " + esc(x.signe.nom)} le ${date(x.signe.le)}.</p>`;
+    else if (x.verification) h += `<p class="msg m-info" style="margin:0 0 6px">Document re\xE7u par e-mail le ${date(x.verification.le)} : en cours de v\xE9rification par l'association. Vous pouvez aussi le signer en ligne ci-dessous.</p>`;
     h += `<details><summary>${x.signe ? "Relire le document" : "Lire le document"}</summary><div class="doc">${docHtml(x.texte)}</div></details>
 <p class="k" style="margin:4px 0 0"><a href="${base}/document/${esc(x.id)}" target="_blank" rel="noopener">Version \xE0 imprimer ou \xE0 t\xE9l\xE9charger (PDF)</a></p></div>`;
   });
@@ -2006,7 +2007,7 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
 // Les 3 documents de chaque réservation ; l'équipe y enregistre ceux reçus signés par e-mail ou courrier.
 function pageDepot(data, k, f, msg) {
   const resas = data.resas || [];
-  const n = { signe: 0, manquant: 0 };
+  const n = { signe: 0, manquant: 0, a_verifier: 0 };
   resas.forEach((r) => r.docs.forEach((x) => { n[x.statut] = (n[x.statut] || 0) + 1; }));
   const liste = resas.filter((r) => f === "tous" || r.docs.some((x) => x.statut !== "signe"));
   const kq = "k=" + encodeURIComponent(k);
@@ -2014,18 +2015,25 @@ function pageDepot(data, k, f, msg) {
   const cache = (r, x) => `<input type="hidden" name="k" value="${esc(k)}"><input type="hidden" name="f" value="${esc(f)}"><input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}">`;
   let h = (msg || "") + `<p class="eyebrow">\xC9quipe A.C.T.E.S.</p><h1>Documents des r\xE9servations</h1>
 <p class="sous">Les trois documents obligatoires de chaque r\xE9servation. Ceux sign\xE9s en ligne s'enregistrent seuls ; quand un client renvoie un document sign\xE9 par e-mail ou par courrier, enregistrez-le ici.</p>
-<div class="kpis"><div><b>${n.manquant}</b>Documents manquants</div><div><b>${n.signe}</b>Documents sign\xE9s</div></div>
+<div class="kpis"><div><b>${n.a_verifier || 0}</b>\xC0 v\xE9rifier</div><div><b>${n.manquant}</b>Manquants</div><div><b>${n.signe}</b>Sign\xE9s</div></div>
 <div class="chips">${filtre("incomplets", "R\xE9servations incompl\xE8tes")}${filtre("tous", "Toutes")}</div>`;
   if (!liste.length) h += `<section class="carte"><p style="margin:0">${f === "tous" ? "Aucune r\xE9servation." : "Tous les documents sont sign\xE9s."}</p></section>`;
   for (const r of liste) {
     h += `<section class="carte" id="r-${esc(r.id)}"><h2 style="margin-bottom:2px">${esc(r.groupe || r.contact)}</h2>
 <p class="k" style="margin:0 0 10px">${r.groupe && r.contact ? esc(r.contact) + " \xB7 " : ""}du ${esc(fdc(r.debut))} au ${esc(fdc(r.fin))}${r.email ? " \xB7 " + esc(r.email) : ""}</p>`;
     for (const x of r.docs) {
-      const ok = x.statut === "signe";
-      h += `<div class="ddep"><div class="ddep-t"><b>${esc(x.titre)}</b><span class="badge ${ok ? "b-ok" : "b-ma"}">${ok ? (x.mode === "email" ? "Re\xE7u par e-mail" : "Sign\xE9 en ligne") : "Manquant"}</span></div>`;
-      if (ok) {
+      const ok = x.statut === "signe", av = x.statut === "a_verifier";
+      const liens = (fs) => (fs || []).filter((f) => f.driveUrl).map((f) => `<a href="${esc(f.driveUrl)}" target="_blank" rel="noopener noreferrer">${esc(f.nom || "fichier")}</a>`).join(" \xB7 ");
+      h += `<div class="ddep"><div class="ddep-t"><b>${esc(x.titre)}</b><span class="badge ${ok ? "b-ok" : av ? "b-av" : "b-ma"}">${ok ? (x.mode === "email" ? "Re\xE7u par e-mail" : "Sign\xE9 en ligne") : av ? "\xC0 v\xE9rifier" : "Manquant"}</span></div>`;
+      if (av) {
+        h += `<p class="k" style="margin:4px 0">Re\xE7u par e-mail${x.de ? " de " + esc(x.de) : ""} le ${esc(new Date(x.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }))}${liens(x.fichiers) ? " \xB7 " + liens(x.fichiers) : ""}</p>`;
+        if (x.problemes && x.problemes.length) h += `<ul class="pb">${x.problemes.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
+        h += `<form method="post" action="/equipe/documents/confirmer" class="recu">${cache(r, x)}<input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par" required><button class="btn btn-v" type="submit">Conforme</button></form>
+<details class="refus"><summary>Pas conforme : demander un nouvel envoi</summary><form method="post" action="/equipe/documents/non-conforme">${cache(r, x)}<textarea name="motif" required minlength="3" maxlength="400" rows="2" placeholder="Ex. : la signature manque en page 3."></textarea><input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par"><div class="btns"><button class="btn btn-r" type="submit">Pr\xE9venir le client</button></div></form></details>`;
+      } else if (ok) {
         h += `<p class="k" style="margin:4px 0">${x.mode === "email" ? "Enregistr\xE9 par " + esc(x.par) : "Par " + esc(x.nom)} le ${esc(new Date(x.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }))}${x.note ? " \xB7 " + esc(x.note) : ""}</p>`;
         if (x.champs) h += `<p class="k" style="margin:4px 0">${Object.entries(x.champs).map(([c, v]) => `${esc({ assureur: "Assureur", police: "Contrat n\xB0", evacuation: "\xC9vacuation" }[c] || c)} : <b>${esc(v)}</b>`).join(" \xB7 ")}</p>`;
+        if (liens(x.fichiers) || x.driveUrl) h += `<p class="k" style="margin:4px 0">${liens(x.fichiers) || `<a href="${esc(x.driveUrl)}" target="_blank" rel="noopener noreferrer">Exemplaire dans Drive</a>`}</p>`;
         if (x.mode === "email") h += `<form method="post" action="/equipe/documents/retirer">${cache(r, x)}<button class="lien" type="submit">Annuler cet enregistrement</button></form>`;
       } else {
         h += `<form method="post" action="/equipe/documents/recu" class="recu">${cache(r, x)}<input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par" required><input type="text" name="note" maxlength="200" placeholder="Note (facultatif)"><button class="btn btn-v" type="submit">✓ Re\xE7u sign\xE9 par e-mail</button></form>`;
@@ -2034,18 +2042,63 @@ function pageDepot(data, k, f, msg) {
     }
     h += `</section>`;
   }
-  h += `<style>.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0 0 14px}.kpis div{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px;font-size:13px;color:var(--gris)}.kpis b{display:block;font-size:26px;color:var(--vert)}
+  h += `<style>.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 14px}.kpis div{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px;font-size:13px;color:var(--gris)}.kpis b{display:block;font-size:26px;color:var(--vert)}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}.chip{border:1px solid var(--bord);background:#fff;border-radius:999px;padding:6px 14px;color:var(--vert);text-decoration:none;font-size:14px}.chip.on{background:var(--vert);color:#fff;border-color:var(--vert)}
 .ddep{border-top:1px solid var(--bord);padding:12px 0}.ddep-t{display:flex;justify-content:space-between;align-items:center;gap:10px}.ddep-t .badge{white-space:nowrap;flex:none}.b-ma{background:#EEE;color:#555}
 .recu{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.recu input{padding:9px 10px!important;border:1px solid var(--bord);border-radius:10px;font:inherit}.par{max-width:140px}.recu input[name=note]{flex:1;min-width:140px}
-.lien{background:none;border:0;padding:0;color:#A33E22;text-decoration:underline;cursor:pointer;font:inherit;font-size:13px}</style>`;
+.lien{background:none;border:0;padding:0;color:#A33E22;text-decoration:underline;cursor:pointer;font:inherit;font-size:13px}.pb{margin:6px 0;padding-left:20px;color:#8A5A12;font-size:14px}.btn-r{background:#A33E22;color:#fff}
+.refus{margin-top:6px}.refus summary{cursor:pointer;color:#A33E22;font-size:14px}.refus textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--bord);border-radius:10px;margin:6px 0}</style>`;
   const res = page("Documents des r\xE9servations", h);
   res.headers.set("referrer-policy", "no-referrer");
   res.headers.set("cache-control", "no-store");
   return res;
 }
+// ----- Contrôle de signature pour l'agent des e-mails (script Google de l'association) -----
+// POST /equipe/agent-ia, en-tête x-agent-cle (dérivée du secret du site), corps { image: "data:image/jpeg;base64,…" }
+// (une petite image de page, ~150 Ko : le relais ne la décode pas, il la passe telle quelle à l'IA gratuite de Cloudflare).
+// Plafond de 80 pages par jour (quota gratuit partagé avec le chat). Réponse { signature, lisible } ou { erreur }.
+async function cleAgentIA(env) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("agent-ia:" + (env.SITE_SECRET || "")));
+  return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function routeAgentIA(request, env) {
+  const rep = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  if (request.method !== "POST") return rep({ erreur: "M\xE9thode" }, 405);
+  if (!env.SITE_SECRET || request.headers.get("x-agent-cle") !== await cleAgentIA(env)) return rep({ erreur: "Non autoris\xE9" }, 401);
+  if (!env.AI) return rep({ erreur: "IA indisponible" }, 503);
+  const jour = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const cle = new Request("https://relais.cache/agent-ia/" + jour);
+  const c = await caches.default.match(cle);
+  const n = c ? Number(await c.text()) || 0 : 0;
+  if (n >= 80) return rep({ erreur: "Quota du jour atteint" }, 429);
+  await caches.default.put(cle, new Response(String(n + 1), { headers: { "cache-control": "max-age=90000" } }));
+  let corps;
+  try { corps = await request.json(); } catch (e) { return rep({ erreur: "Corps illisible" }, 400); }
+  const image = String(corps && corps.image || "");
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(image) || image.length > 1500000) return rep({ erreur: "Image refus\xE9e (JPEG/PNG, 1 Mo au plus)" }, 400);
+  const consigne = `Cette image est une page d'un document papier (scan ou photo). R\xE9ponds uniquement par un objet JSON, sans autre texte :
+{"lisible": true ou false (la page est enti\xE8re et nette), "signature": true ou false (une signature manuscrite \xE0 l'encre, trac\xE9e \xE0 la main, est visible sur cette page ; un nom tap\xE9 \xE0 la machine ou une ligne vide ne compte pas)}`;
+  const run = () => env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { messages: [{ role: "user", content: consigne }], image, max_tokens: 80, temperature: 0 });
+  try {
+    let out;
+    try { out = await run(); } catch (e) {
+      if (!/agree|licen/i.test(String(e && e.message || e))) throw e;
+      await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt: "agree" }).catch(() => null);
+      out = await run();
+    }
+    const t = String(out && (out.response || out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || "");
+    const m = t.match(/\{[\s\S]*\}/);
+    let v = null;
+    try { v = m ? JSON.parse(m[0]) : null; } catch (e) { v = null; }
+    if (!v || typeof v.signature !== "boolean") return rep({ erreur: "R\xE9ponse de l'IA illisible" }, 502);
+    return rep({ signature: v.signature === true, lisible: v.lisible !== false });
+  } catch (e) {
+    console.error("agent IA", String(e && e.message || e));
+    return rep({ erreur: "IA indisponible" }, 503);
+  }
+}
 async function routeEquipe(request, env, url) {
-  const m = /^\/equipe\/documents(\/(recu|retirer))?\/?$/.exec(url.pathname);
+  const m = /^\/equipe\/documents(\/(recu|retirer|confirmer|non-conforme))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
   const action = m[2];
   if (request.method === "POST") {
@@ -2055,7 +2108,7 @@ async function routeEquipe(request, env, url) {
     const k = g("k"), f = g("f") || "incomplets", resa = g("resa");
     const retour = (q) => redirige("/equipe/documents?k=" + encodeURIComponent(k) + "&f=" + encodeURIComponent(f) + "&" + q + "#r-" + encodeURIComponent(resa));
     if (!action) return retour("");
-    const r2 = await appel(env, "POST", null, { action: action === "recu" ? "depot-recu" : "depot-retirer", k, resa, doc: g("doc"), par: g("par"), note: g("note") });
+    const r2 = await appel(env, "POST", null, { action: "depot-" + action, k, resa, doc: g("doc"), par: g("par"), note: g("note"), motif: g("motif") });
     if (r2.status === 401) return new Response("Lien invalide.", { status: 401 });
     if (r2.status !== 200) return retour("err=" + encodeURIComponent(String(r2.data && r2.data.error || "Erreur").slice(0, 200)));
     return retour("ok=" + action);
@@ -2068,6 +2121,8 @@ async function routeEquipe(request, env, url) {
   const p = url.searchParams, f = p.get("f") === "tous" ? "tous" : "incomplets";
   let msg = "";
   if (p.get("ok") === "recu") msg = `<div class="msg m-ok">Document enregistr\xE9 comme re\xE7u sign\xE9.</div>`;
+  else if (p.get("ok") === "confirmer") msg = `<div class="msg m-ok">Document confirm\xE9 : il compte comme sign\xE9.</div>`;
+  else if (p.get("ok") === "non-conforme") msg = `<div class="msg m-ok">Le client a re\xE7u un e-mail pour renvoyer le document.</div>`;
   else if (p.get("ok") === "retirer") msg = `<div class="msg m-ok">Enregistrement annul\xE9 : le document est de nouveau manquant.</div>`;
   else if (p.get("err")) msg = `<div class="msg m-err">${esc(p.get("err"))}</div>`;
   return pageDepot(r2.data, k, f, msg);
@@ -2779,6 +2834,7 @@ var worker_default = {
     if (ferme) return ferme;
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
     if (/^\/sejour(\/|$)/.test(url.pathname)) return routeSejour(request, env, url);
+    if (url.pathname === "/equipe/agent-ia") return routeAgentIA(request, env);
     if (/^\/equipe\/documents(\/|$)/.test(url.pathname)) return routeEquipe(request, env, url);
     if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
     if (url.pathname === "/api/chat" && request.method === "POST") return routeChat(request, env, ctx);

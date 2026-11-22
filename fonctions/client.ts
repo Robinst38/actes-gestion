@@ -521,11 +521,13 @@ Sapeurs-pompiers : 18 · SAMU : 15 · Numéro d'urgence européen : 112 · A.C.T
 ];
 /** Documents signés d'une réservation (une acceptation en ligne de l'ancien contrat vaut convention d'utilisation).
  *  mode "electronique" : signé en ligne depuis l'espace séjour (code reçu par e-mail) ;
- *  mode "email" : document imprimé, signé et renvoyé par e-mail ou courrier, enregistré par l'équipe dans le dépôt. */
+ *  mode "email" : document imprimé, signé et renvoyé par e-mail ou courrier — enregistré par l'équipe dans le dépôt, ou par
+ *  l'agent des e-mails (script Google de l'association) : statut "valide" s'il est conforme, sinon "a_verifier" (un clic de l'équipe). */
 function docsSignes(r: any): Record<string, any> {
   const s = { ...(r.documentsSignes || {}) };
   if (!s.utilisation && r.contratAccepte) s.utilisation = { mode: "electronique", nom: r.contratAccepte.nom, le: r.contratAccepte.le };
-  for (const k of Object.keys(s)) if (!s[k] || s[k].statut === "refuse" || s[k].mode === "scan") delete s[k]; // anciens essais de dépôt de scan : ignorés
+  // Ne comptent pas : anciens essais de dépôt de scan, documents reçus par e-mail encore « à vérifier » par l'équipe.
+  for (const k of Object.keys(s)) if (!s[k] || s[k].statut === "refuse" || s[k].statut === "a_verifier" || s[k].mode === "scan") delete s[k];
   return s;
 }
 const docsComplets = (r: any) => { const s = docsSignes(r); return DOCS_RESA.every((d) => !!s[d.id]); };
@@ -542,6 +544,24 @@ async function sha256(t: string) {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
   return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+/** Exemplaire d'un document signé en ligne, en HTML (le script Google en fait un PDF rangé dans le dossier du client). */
+function htmlExemplaire(d: any, r: any, v: any) {
+  const e = (t: unknown) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const corps = String(v.texte || "").trim().split(/\n\s*\n/).map((b) => {
+    const l = b.split("\n").map((x) => x.trim()).filter(Boolean);
+    if (l.length === 1 && l[0].startsWith("## ")) return "<h3>" + e(l[0].slice(3)) + "</h3>";
+    if (l.every((x) => x.startsWith("• "))) return "<ul>" + l.map((x) => "<li>" + e(x.slice(2)) + "</li>").join("") + "</ul>";
+    return "<p>" + l.map(e).join("<br>") + "</p>";
+  }).join("");
+  const ch = v.champs ? "<p>" + d.champs.map((c: any) => e(c.lib) + " : <b>" + e(v.champs[c.id]) + "</b>").join("<br>") + "</p>" : "";
+  return "<html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.4}h1{font-size:16pt}h3{font-size:12pt;margin:14px 0 4px}.sig{border:1px solid #999;padding:10px;margin-top:18px}</style></head><body>"
+    + "<h1>" + e(d.titre) + "</h1><p><b>Réservation :</b> " + e(r.groupe || r.contact) + " — séjour du " + fd(r.debut) + " au " + fd(r.fin) + "</p>" + corps + ch
+    + "<div class='sig'><p>" + e(d.case) + "</p><p><b>Signé électroniquement par " + e(v.nom) + "</b> le " + e(new Date(v.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }))
+    + " (heure de Paris), après identification par un code envoyé à " + e(r.email) + ".<br>Adresse IP : " + e(v.ip || "—") + "<br>Empreinte SHA-256 du texte signé : " + e(v.version) + "</p></div></body></html>";
+}
+/** Nom du dossier Drive du client : nom du groupe, sinon nom de famille du contact, en majuscules. */
+const dossierClient = (r: any) => (String(r.groupe || "").trim() || String(r.contact || "").trim().split(/\s+/).pop() || "SANS NOM")
+  .toUpperCase().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const masquerEmail = (e: string) => String(e || "").replace(/^(.)[^@]*(@.*)$/, "$1•••$2");
 
 /** Prévient le bureau quand les trois documents d'une réservation sont signés (une seule fois). */
@@ -559,10 +579,96 @@ async function siDocsComplets(sb: any, r: any, s: Record<string, any>) {
       + "\n\nDépôt des documents : " + (await lienDepot("r-" + r.id)) + "\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
 }
 
+// ----- Agent des e-mails -----
+// Le script Google de l'association lit la boîte contact@ : pour chaque e-mail avec pièces jointes venant d'un client,
+// il range les fichiers dans Drive (Réservations › RESERVATION <année> › <GROUPE>), lit le texte des pages (OCR Google)
+// et fait regarder la signature par l'IA gratuite de Cloudflare, puis envoie ici son analyse :
+// document conforme → compté comme signé ; doute → « à vérifier » (un clic de l'équipe). Le client reçoit un accusé de réception.
+async function agent(sb: any, b: any, cfg: any, ent: any): Promise<Response> {
+  const t = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+  const resas = await lireCollection(sb, "crm_actes_resas");
+  if (b.action === "agent-reservations") {
+    const lim = addD(auj(), -30);
+    const liste: any[] = [], exemplaires: any[] = [];
+    for (const r of resas) {
+      if (r.statut === "annulee" || (r.fin && r.fin < lim)) continue;
+      const s = docsSignes(r), brut = r.documentsSignes || {};
+      const docs = DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, champs: d.champs.map((c) => c.lib), statut: s[d.id] ? "signe" : brut[d.id] && brut[d.id].statut === "a_verifier" ? "a_verifier" : "manquant" }));
+      const dossier = dossierClient(r), annee = String(r.debut || auj()).slice(0, 4);
+      if (docs.some((d) => d.statut !== "signe")) liste.push({ id: String(r.id), email: String(r.email || "").toLowerCase(), contact: r.contact || "", groupe: r.groupe || "", debut: r.debut, fin: r.fin, annee, dossier, docs });
+      for (const d of DOCS_RESA) {
+        const v = brut[d.id];
+        if (v && v.mode === "electronique" && v.texte && !v.driveId) exemplaires.push({ cle: String(r.id) + ":" + d.id, annee, dossier, nom: d.titre + " - signé en ligne par " + t(v.nom, 60) + " le " + String(v.le).slice(0, 10), html: htmlExemplaire(d, r, v) });
+      }
+    }
+    return json({ resas: liste, exemplaires: exemplaires.slice(0, 30), cleIA: await sha256("agent-ia:" + (Deno.env.get("SITE_SECRET") || "")) });
+  }
+  if (b.action === "agent-ranges") {
+    let n = 0;
+    for (const f of (Array.isArray(b.faits) ? b.faits : []).slice(0, 60)) {
+      const m = /^([\w-]{1,80}):(principe|utilisation|securite)$/.exec(String(f && f.cle || ""));
+      const r = m && resas.find((x) => String(x.id) === m[1]);
+      if (!r || !r.documentsSignes || !r.documentsSignes[m[2]] || !/^[\w-]{10,}$/.test(String(f.driveId || ""))) continue;
+      await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } } });
+      r.documentsSignes = { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId) } };
+      n++;
+    }
+    return json({ ok: true, marques: n });
+  }
+  if (b.action === "agent-documents") {
+    const r = resas.find((x) => String(x.id) === String(b.resa));
+    if (!r) return erreur("Réservation introuvable.", 404);
+    const msg = { id: t(b.message && b.message.id, 80), de: t(b.message && b.message.de, 120), objet: t(b.message && b.message.objet, 200), date: t(b.message && b.message.date, 40) };
+    const fichiers = (Array.isArray(b.fichiers) ? b.fichiers : []).slice(0, 20).map((f: any) => ({ nom: t(f.nom, 120), driveId: t(f.driveId, 80), driveUrl: t(f.driveUrl, 300) }));
+    const s = docsSignes(r), le = new Date().toISOString();
+    const ns = { ...(r.documentsSignes || {}) };
+    const bilan: { d: any; ok: boolean; problemes: string[] }[] = [];
+    for (const a of (Array.isArray(b.analyse) ? b.analyse : [])) {
+      const d = DOCS_RESA.find((x) => x.id === a.doc);
+      if (!d || s[d.id] || bilan.some((x) => x.d.id === d.id)) continue;
+      const problemes = (Array.isArray(a.problemes) ? a.problemes : []).map((x: unknown) => t(x, 200)).filter(Boolean).slice(0, 8);
+      if (b.expediteurReconnu !== true) problemes.unshift("Envoyé depuis une autre adresse que celle de la réservation (" + msg.de + ")");
+      const ok = a.conforme === true && !problemes.length;
+      const idx = (Array.isArray(a.fichiers) ? a.fichiers : []).map(Number).filter((i: number) => fichiers[i]);
+      ns[d.id] = { mode: "email", statut: ok ? "valide" : "a_verifier", le, par: "agent des e-mails", verif: { problemes, mail: msg }, fichiers: idx.map((i: number) => fichiers[i]) };
+      bilan.push({ d, ok, problemes });
+    }
+    if (!bilan.length) return json({ ok: true, rien: true });
+    await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns });
+    const s2 = docsSignes({ ...r, documentsSignes: ns });
+    await siDocsComplets(sb, r, s2);
+    if (smtpConfigure()) {
+      const manquants = DOCS_RESA.filter((d) => !s2[d.id] && !(ns[d.id] && ns[d.id].statut === "a_verifier"));
+      if (r.email) await envoyer({ to: r.email, subject: "Documents reçus — séjour du " + fd(r.debut) + " au " + fd(r.fin),
+        body: "Bonjour " + (r.contact || "") + ",\n\nNous avons bien reçu vos documents :\n" + bilan.map((x) => "• " + x.d.titre + " : " + (x.ok ? "enregistré, merci" : "reçu, en cours de vérification par l'association")).join("\n")
+          + (manquants.length ? "\n\nIl manque encore : " + manquants.map((d) => d.titre).join(", ") + ". Vous pouvez aussi les signer en ligne dans votre espace séjour :\n" + URL_SITE + "/sejour/" + r.jeton : "")
+          + "\n\nBien cordialement,\n" + (ent.nom || "A.C.T.E.S") }).catch((e) => console.error("accusé documents", String(e)));
+      const dest = Deno.env.get("SMTP_USER");
+      if (dest && bilan.some((x) => !x.ok)) await envoyer({ to: dest, subject: "À vérifier : documents reçus par e-mail — " + (r.groupe || r.contact || "réservation"),
+        body: "Bonjour,\n\nL'agent des e-mails a reçu des documents de " + (r.groupe || r.contact || "") + " (séjour du " + fd(r.debut) + " au " + fd(r.fin) + "), envoyés par " + msg.de + " le " + msg.date + ".\n\n"
+          + bilan.map((x) => "• " + x.d.titre + " : " + (x.ok ? "conforme, enregistré" : "À VÉRIFIER\n" + x.problemes.map((p) => "    – " + p).join("\n"))).join("\n")
+          + "\n\nFichiers rangés dans Drive :\n" + fichiers.map((f) => "• " + f.nom + " : " + f.driveUrl).join("\n")
+          + "\n\nConfirmer ou refuser : " + (await lienDepot("r-" + r.id)) + "\n\nLe logiciel A.C.T.E.S" }).catch((e) => console.error("alerte équipe", String(e)));
+    }
+    return json({ ok: true, valides: bilan.filter((x) => x.ok).length, aVerifier: bilan.filter((x) => !x.ok).length });
+  }
+  if (b.action === "agent-a-trier") {
+    const dest = smtpConfigure() ? Deno.env.get("SMTP_USER") : "";
+    if (dest) await envoyer({ to: dest, subject: "À trier : documents reçus par e-mail sans réservation reconnue",
+      body: "Bonjour,\n\nL'agent des e-mails a reçu des pièces jointes qui ressemblent à des documents de réservation, mais il n'a pas trouvé la réservation correspondante.\n\nDe : " + t(b.de, 120) + "\nObjet : " + t(b.objet, 200) + "\nRaison : " + t(b.raison, 200)
+        + "\n\nLe message est marqué « ACTES/À trier » dans la boîte contact@. Rangez les documents et enregistrez-les dans le suivi des documents :\n" + (await lienDepot()) + "\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
+    return json({ ok: true });
+  }
+  return erreur("Action inconnue.");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const secret = Deno.env.get("SITE_SECRET");
-  if (!secret || req.headers.get("x-site-secret") !== secret) return erreur("Non autorisé.", 401);
+  // L'agent des e-mails (script Google de l'association) s'identifie avec la clé de sauvegarde, pour ses seules actions « agent-… ».
+  const cleAgent = Deno.env.get("BACKUP_SECRET");
+  const parAgent = !!cleAgent && req.headers.get("x-backup-secret") === cleAgent;
+  if (!parAgent && (!secret || req.headers.get("x-site-secret") !== secret)) return erreur("Non autorisé.", 401);
   const sb = admin();
   const cfg = config(await lireDoc(sb, "chalet_config", "main"));
   const ent = await entreprise(sb).catch(() => ({} as any));
@@ -596,7 +702,8 @@ Deno.serve(async (req) => {
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
       // Les trois documents obligatoires pour valider la réservation, et leur état de signature
       documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, texte: texteDoc(d, cfg),
-        signe: s[d.id] ? { mode: s[d.id].mode, nom: s[d.id].nom || "", le: s[d.id].le } : null })); })(),
+        signe: s[d.id] ? { mode: s[d.id].mode, nom: s[d.id].nom || "", le: s[d.id].le } : null,
+        verification: !s[d.id] && r.documentsSignes && r.documentsSignes[d.id] && r.documentsSignes[d.id].statut === "a_verifier" ? { le: r.documentsSignes[d.id].le } : null })); })(),
       signature: { email: masquerEmail(r.email || ""), codeEnvoye: !!(r.signatureCode && r.signatureCode.empreinte && Date.parse(r.signatureCode.expire || "") > Date.now()), possible: !!(r.email && smtpConfigure()) },
       documentsComplets: docsComplets(r),
       paiementEnLigne: helloassoConfigure(),
@@ -627,6 +734,13 @@ Deno.serve(async (req) => {
     const b = await req.json().catch(() => null);
     if (!b) return erreur("Demande incomplète.");
 
+    // ----- Agent des e-mails : documents renvoyés signés par e-mail, rangés dans Drive -----
+    if (parAgent || String(b.action || "").startsWith("agent-")) {
+      if (!parAgent) return erreur("Non autorisé.", 401);
+      const res = await agent(sb, b, cfg, ent);
+      return res;
+    }
+
     // Connexion à l'espace séjour avec l'adresse e-mail de la réservation et le code d'accès (6 caractères, reçu par e-mail)
     if (b.action === "connexion") {
       const mail = String(b.email || "").trim().toLowerCase(), code = String(b.code || "").replace(/\s+/g, "").toUpperCase();
@@ -652,9 +766,10 @@ Deno.serve(async (req) => {
             return {
               id: String(x.id), groupe: x.groupe || "", contact: x.contact || "", email: x.email || "", debut: x.debut, fin: x.fin, statut: x.statut,
               docs: DOCS_RESA.map((d) => {
-                const v = s[d.id];
+                const v = s[d.id], av = (x.documentsSignes || {})[d.id];
+                if (!v && av && av.statut === "a_verifier") return { id: d.id, titre: d.titre, statut: "a_verifier", le: av.le, problemes: (av.verif && av.verif.problemes) || [], fichiers: av.fichiers || [], de: av.verif && av.verif.mail ? av.verif.mail.de : "" };
                 if (!v) return { id: d.id, titre: d.titre, statut: "manquant" };
-                return { id: d.id, titre: d.titre, statut: "signe", mode: v.mode, le: v.le, nom: v.nom || "", par: v.par || "", note: v.note || "", champs: v.champs || null };
+                return { id: d.id, titre: d.titre, statut: "signe", mode: v.mode, le: v.le, nom: v.nom || "", par: v.par || "", note: v.note || "", champs: v.champs || null, fichiers: v.fichiers || [], driveUrl: v.driveUrl || "" };
               }),
             };
           });
@@ -672,6 +787,27 @@ Deno.serve(async (req) => {
         await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...(r.documentsSignes || {}), [d.id]: rec } });
         await siDocsComplets(sb, r, s2);
         return json({ ok: true });
+      }
+      const brutDoc = (r.documentsSignes || {})[d.id];
+      if (b.action === "depot-confirmer") {
+        if (!brutDoc || brutDoc.statut !== "a_verifier") return erreur("Ce document n'est pas en attente de vérification.", 409);
+        const ns = { ...(r.documentsSignes || {}), [d.id]: { ...brutDoc, statut: "valide", par: t(b.par, 60) || "l'équipe", confirmeLe: new Date().toISOString() } };
+        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns });
+        await siDocsComplets(sb, r, docsSignes({ ...r, documentsSignes: ns }));
+        return json({ ok: true });
+      }
+      if (b.action === "depot-non-conforme") {
+        if (!brutDoc || brutDoc.statut !== "a_verifier") return erreur("Ce document n'est pas en attente de vérification.", 409);
+        const motif = t(b.motif, 400);
+        if (motif.length < 3) return erreur("Merci d'indiquer ce qui ne va pas : ce sera envoyé au client.");
+        const ns = { ...(r.documentsSignes || {}) };
+        delete ns[d.id];
+        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, documentsHistorique: [...(r.documentsHistorique || []), { doc: d.id, ...brutDoc, statut: "refuse", refus: { motif, par: t(b.par, 60), le: new Date().toISOString() } }].slice(-30) });
+        let mail = false;
+        if (smtpConfigure() && r.email) await envoyer({ to: r.email, subject: "Document à renvoyer pour votre séjour au " + cfg.nomChalet,
+          body: "Bonjour " + (r.contact || "") + ",\n\nMerci pour l'envoi du document « " + d.titre + " ». Nous ne pouvons pas l'enregistrer : " + motif
+            + "\n\nMerci de le renvoyer signé, ou de le signer en ligne depuis votre espace séjour :\n" + URL_SITE + "/sejour/" + r.jeton + "\n\nBien cordialement,\n" + (ent.nom || "A.C.T.E.S") }).then(() => { mail = true; }).catch(() => {});
+        return json({ ok: true, mail });
       }
       if (b.action === "depot-retirer") {
         if (!actuel || actuel.mode !== "email") return erreur("Seul un document enregistré « reçu par e-mail » peut être retiré.", 409);
