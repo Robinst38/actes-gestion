@@ -1729,12 +1729,12 @@ function page(titre, corps, o = {}) {
 }
 var introuvable = () => page("Lien introuvable", `<p class="eyebrow">Chalet Bellevue</p><h1>Ce lien n'est pas (ou plus) valable</h1><p class="sous">V\xE9rifiez l'adresse re\xE7ue par e-mail, ou contactez l'association.</p><a class="btn btn-v" href="${SITE}/contact">Nous contacter</a>`, { status: 404 });
 var indisponible = () => page("Service indisponible", `<h1>Service momentan\xE9ment indisponible</h1><p class="sous">Merci de r\xE9essayer dans quelques minutes.</p>`, { status: 503 });
-async function appel(env, methode, params, corps) {
+async function appel(env, methode, params, corps, delai = 15e3) {
   const url = new URL(env.LOGICIEL_URL.replace(/\/site\/?$/, "/client"));
   for (const [k, v] of Object.entries(params || {})) url.searchParams.set(k, v);
   const r = await fetch(url, {
     method: methode,
-    signal: AbortSignal.timeout(15e3),
+    signal: AbortSignal.timeout(delai),
     headers: { "x-site-secret": env.SITE_SECRET, "content-type": "application/json", accept: "application/json" },
     body: corps ? JSON.stringify(corps) : void 0
   });
@@ -1873,6 +1873,61 @@ ${champ("signature", "Signature : tapez votre pr\xE9nom et votre nom", "text", '
 <div class="btns"><button class="btn btn-v" type="submit">${P ? "Confirmer mon renouvellement" : "Envoyer mon bulletin d'adh\xE9sion"}</button></div></form>
 <style>.adh:has(#adh-coord-mod:not(:checked)) .adh-coord{display:none}.adh-coord{border-left:3px solid var(--bord);padding-left:12px;margin:6px 0}.adh label:not(.coche){display:block;margin:12px 0 4px}.adh input[type=date],.adh input[type=tel],.adh input[type=email],.adh select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--bord);border-radius:10px;background:#fff}.adh-grille{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.adh-ligne{display:flex;flex-wrap:wrap;gap:10px 22px;margin:6px 0}.adh h3{margin:20px 0 6px}.adh-liste{margin:0 0 10px;padding-left:20px}.adh .coche{margin:8px 0}@media(max-width:560px){.adh-grille{grid-template-columns:1fr}}</style></section>`;
 }
+// Texte d'un document : « ## » = intertitre, « • » = puce, « 1. » = étape, ligne vide = paragraphe
+function docHtml(t) {
+  return String(t || "").trim().split(/\n\s*\n/).filter(Boolean).map((b) => {
+    const l = b.split("\n").map((x) => x.trim()).filter(Boolean);
+    if (l.length === 1 && l[0].startsWith("## ")) return `<h3>${esc(l[0].slice(3))}</h3>`;
+    if (l.every((x) => x.startsWith("• "))) return `<ul class="puces">${l.map((x) => `<li>${esc(x.slice(2))}</li>`).join("")}</ul>`;
+    if (l.every((x) => /^\d+\.\s/.test(x))) return `<ol>${l.map((x) => `<li>${esc(x.replace(/^\d+\.\s*/, ""))}</li>`).join("")}</ol>`;
+    return `<p>${l.map(esc).join("<br>")}</p>`;
+  }).join("");
+}
+// Les trois documents obligatoires de la réservation : signature en ligne ou dépôt du document signé scanné
+function sectionDocuments(d, base) {
+  const docs = d.documents || [];
+  if (!docs.length) return "";
+  const faits = docs.filter((x) => x.signe).length;
+  const date = (iso) => esc(new Date(iso).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }));
+  let h = `<section class="carte" id="documents"><h2>Documents \xE0 signer <span class="badge ${faits === docs.length ? "b-ok" : "b-av"}" style="vertical-align:middle">${faits} / ${docs.length}</span></h2>
+<p>Ces ${docs.length} documents sont <b>obligatoires pour valider votre r\xE9servation</b>. Pour chacun, au choix : signez en ligne, ou imprimez-le, signez-le et envoyez-le scann\xE9 (ou photographi\xE9).</p>`;
+  docs.forEach((x, i) => {
+    h += `<div class="dsig${x.signe ? " fait" : ""}" id="doc-${esc(x.id)}"><h3><span class="dnum">${x.signe ? "✓" : i + 1}</span>${esc(x.titre)}</h3>`;
+    if (x.signe) {
+      h += x.signe.mode === "scan"
+        ? `<p class="msg m-ok" style="margin:0">✓ Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""}. L'association le v\xE9rifiera.</p>`
+        : `<p class="msg m-ok" style="margin:0">✓ Sign\xE9 en ligne le ${date(x.signe.le)} par ${esc(x.signe.nom)}.</p>`;
+      h += `<details><summary>Relire le document</summary><div class="doc">${docHtml(x.texte)}</div></details></div>`;
+      return;
+    }
+    h += `<details${i === docs.findIndex((y) => !y.signe) ? " open" : ""}><summary>Lire le document</summary><div class="doc">${docHtml(x.texte)}</div></details>
+<form method="post" action="${base}/signer" class="dform"><input type="hidden" name="doc" value="${esc(x.id)}">
+${(x.champs || []).map((c) => `<label for="ch-${esc(x.id)}-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="ch-${esc(x.id)}-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
+<label for="sig-${esc(x.id)}">Signature : tapez votre pr\xE9nom et votre nom</label><input type="text" id="sig-${esc(x.id)}" name="nom" required minlength="2" maxlength="120" autocomplete="name" value="">
+<label class="coche"><input type="checkbox" name="accepte" required> ${esc(x.case)}</label>
+<div class="btns"><button class="btn btn-v" type="submit">Signer en ligne</button></div></form>
+<details class="dscan"><summary>Ou envoyer le document sign\xE9 scann\xE9</summary>
+<p><a href="${base}/document/${esc(x.id)}" target="_blank" rel="noopener">Ouvrir le document \xE0 imprimer</a>, compl\xE9tez-le, signez-le, puis envoyez-le ici : PDF, JPG ou PNG, 8 Mo au plus.</p>
+<form method="post" action="${base}/deposer" enctype="multipart/form-data"><input type="hidden" name="doc" value="${esc(x.id)}">
+<input type="file" name="fichier" accept="application/pdf,image/jpeg,image/png" required>
+<div class="btns"><button class="btn btn-v" type="submit">Envoyer le document sign\xE9</button></div></form></details></div>`;
+  });
+  return h + `<style>.dsig{border-top:1px solid var(--bord);padding:16px 0 6px}.dsig h3{display:flex;align-items:center;gap:10px;margin:0 0 10px}.dnum{width:26px;height:26px;flex:none;border-radius:50%;background:var(--vert);color:#fff;font-size:13px;display:inline-flex;align-items:center;justify-content:center}.dsig.fait .dnum{background:var(--ok)}.dsig details{margin:8px 0}.dsig summary{cursor:pointer;color:var(--vert2);font-weight:600}.dsig .doc{max-height:420px;overflow:auto;margin-top:8px}.dform label:not(.coche){display:block;margin:12px 0 4px}.dscan{background:#FDFBF7;border:1px dashed var(--bord);border-radius:10px;padding:10px 12px}.dscan input[type=file]{width:100%;margin:8px 0}</style></section>`;
+}
+// Version à imprimer d'un document (pour le signer à la main puis le renvoyer scanné)
+function pageDocument(d, id) {
+  const x = (d.documents || []).find((y) => y.id === id);
+  if (!x) return null;
+  const champs = (x.champs || []).map((c) => `<p>${esc(c.lib)} : ________________________________________</p>`).join("");
+  return page(x.titre, `<style>@media print{.np{display:none}body{background:#fff}}.imp{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:28px}.imp h1{font-size:26px}.imp h3{margin-top:18px}</style>
+<div class="np btns" style="margin-bottom:14px"><button class="btn btn-v" onclick="window.print()">Imprimer</button></div>
+<div class="imp"><h1>${esc(x.titre)}</h1>
+<p><b>R\xE9servation :</b> ${esc(d.groupe || d.contact)} \xB7 du ${esc(fdc(d.debut))} au ${esc(fdc(d.fin))} \xB7 ${d.personnes} personnes</p>
+${docHtml(x.texte)}${champs}
+<h3>Signature</h3><p>${esc(x.case)}</p>
+<p>Fait \xE0 ______________________, le ___ / ___ / ______</p>
+<p>Nom, pr\xE9nom et signature, pr\xE9c\xE9d\xE9s de \xAB Lu et approuv\xE9 \xBB :</p><div style="height:90px"></div></div>`);
+}
 function vueSejour(d, jeton, msg) {
   const base = "/sejour/" + jeton;
   const acc = d.contrat && d.contrat.accepte;
@@ -1891,7 +1946,7 @@ ${d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style
   // "limite" → cotisation pas encore réglée : suivi de la réservation et règlement seulement ; "complet" → tout l'espace.
   const acces = d.acces || "complet";
   if (acces === "bulletin") {
-    h = h.replace(`<section class="carte"><h2>Votre s\xE9jour</h2>`, `<div class="msg m-info"><b>\xC9tape obligatoire :</b> remplissez votre ${d.adhesion && d.adhesion.type === "renouvellement" ? "renouvellement d'adh\xE9sion" : "bulletin d'adh\xE9sion"} ci-dessous. Le contrat, le paiement et l'organisation du s\xE9jour s'afficheront ensuite.</div><section class="carte"><h2>Votre s\xE9jour</h2>`);
+    h = h.replace(`<section class="carte"><h2>Votre s\xE9jour</h2>`, `<div class="msg m-info"><b>\xC9tape obligatoire :</b> remplissez votre ${d.adhesion && d.adhesion.type === "renouvellement" ? "renouvellement d'adh\xE9sion" : "bulletin d'adh\xE9sion"} ci-dessous. Les documents \xE0 signer, le paiement et l'organisation du s\xE9jour s'afficheront ensuite.</div><section class="carte"><h2>Votre s\xE9jour</h2>`);
     h += sectionAdhesion(d, base);
     h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
     return h;
@@ -1905,23 +1960,29 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
 <p class="k" style="margin:12px 0 0">D\xE9j\xE0 r\xE9gl\xE9 : <b>${eur(d.paye)}</b> \xB7 Reste \xE0 r\xE9gler : <b>${eur(d.reste)}</b></p></section>`;
   }
   if (d.adhesion && d.adhesion.aFaire) h += sectionAdhesion(d, base);
-  h += `<section class="carte" id="contrat"><h2>Contrat de location</h2>
-<div class="doc"><h3>Conditions de location</h3>${paras(d.contrat.conditions)}<h3>R\xE8glement int\xE9rieur</h3>${paras(d.contrat.reglement)}</div>`;
-  if (acc) {
-    h += `<p class="msg m-ok" style="margin:16px 0 0">\u2713 Contrat accept\xE9 en ligne le ${esc(new Date(acc.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }))} par ${esc(acc.nom)}.</p>`;
-  } else {
-    h += `<form method="post" action="${base}/accepter"><label for="nom">Nom et pr\xE9nom du signataire</label>
-<input type="text" id="nom" name="nom" required minlength="2" maxlength="120" autocomplete="name" value="${esc(d.contact)}">
-<label class="coche"><input type="checkbox" name="accepte" required> J'ai lu et j'accepte les conditions de location et le r\xE8glement int\xE9rieur, au nom du groupe.</label>
-<div class="btns"><button class="btn btn-v" type="submit">Accepter le contrat</button></div></form>`;
+  // Les trois documents obligatoires (principe locatif, convention d'utilisation, convention sécurité).
+  // Ancienne réponse du serveur sans « documents » : on garde l'ancien contrat.
+  const docsOk = Array.isArray(d.documents) ? !!d.documentsComplets : !!acc;
+  if (Array.isArray(d.documents)) h += sectionDocuments(d, base);
+  else {
+    h += `<section class="carte" id="contrat"><h2>Contrat de location</h2>
+  <div class="doc"><h3>Conditions de location</h3>${paras(d.contrat.conditions)}<h3>R\xE8glement int\xE9rieur</h3>${paras(d.contrat.reglement)}</div>`;
+    if (acc) {
+      h += `<p class="msg m-ok" style="margin:16px 0 0">\u2713 Contrat accept\xE9 en ligne le ${esc(new Date(acc.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }))} par ${esc(acc.nom)}.</p>`;
+    } else {
+      h += `<form method="post" action="${base}/accepter"><label for="nom">Nom et pr\xE9nom du signataire</label>
+  <input type="text" id="nom" name="nom" required minlength="2" maxlength="120" autocomplete="name" value="${esc(d.contact)}">
+  <label class="coche"><input type="checkbox" name="accepte" required> J'ai lu et j'accepte les conditions de location et le r\xE8glement int\xE9rieur, au nom du groupe.</label>
+  <div class="btns"><button class="btn btn-v" type="submit">Accepter le contrat</button></div></form>`;
+    }
+    h += `</section>`;
   }
-  h += `</section>`;
   if (d.reste > 0 && d.statut !== "demande") {
     h += `<section class="carte" id="paiement"><h2>Paiement</h2>`;
     if (!d.paiementEnLigne) {
       h += `<p>Le r\xE8glement se fait par virement ou par ch\xE8que \xE0 l'ordre de A.C.T.E.S., selon les indications de l'association. Les ch\xE8ques doivent \xEAtre re\xE7us au plus tard un mois avant le d\xE9but du s\xE9jour.</p>`;
-    } else if (!acc) {
-      h += `<p>Le paiement en ligne sera disponible d\xE8s que vous aurez accept\xE9 le contrat ci-dessus.</p>`;
+    } else if (!docsOk) {
+      h += `<p>Le paiement en ligne sera disponible d\xE8s que les documents ci-dessus seront sign\xE9s.</p>`;
     } else {
       h += `<p>Paiement s\xE9curis\xE9 par carte bancaire avec <b>HelloAsso</b>, la plateforme de paiement des associations. Vous pouvez aussi r\xE9gler par ch\xE8que \xE0 l'ordre de A.C.T.E.S., \xE0 recevoir au plus tard un mois avant le d\xE9but du s\xE9jour, ou par virement.</p><div class="btns">`;
       if (acompte && acompte.reste > 0) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="acompte"><button class="btn btn-p" type="submit">Payer l'acompte : ${eur(acompte.reste)}</button></form>`;
@@ -1947,9 +2008,9 @@ async function routeSejour(request, env, url) {
     }
     return pageConnexion("", false);
   }
-  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace|adhesion))?\/?$/.exec(url.pathname);
+  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace|adhesion|signer|deposer|document\/(principe|utilisation|securite)))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
-  const jeton = m[1], action = m[3];
+  const jeton = m[1], action = m[3] && m[3].startsWith("document/") ? "document" : m[3], docId = m[4];
   if (request.method === "POST" && action === "espace") {
     if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
     const b = await request.json().catch(() => null);
@@ -1965,6 +2026,25 @@ async function routeSejour(request, env, url) {
       if (!f.get("accepte")) return redirige("/sejour/" + jeton + "?err=coche#contrat");
       const r2 = await appel(env, "POST", null, { action: "accepter", jeton, nom: String(f.get("nom") || ""), ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
       return redirige("/sejour/" + jeton + (r2.status === 200 ? "?ok=contrat#paiement" : r2.status === 403 ? "?err=acces#adhesion" : "?err=contrat#contrat"));
+    }
+    if (action === "signer") {
+      const doc = String(f.get("doc") || ""), champs = {};
+      for (const [k, v] of f.entries()) if (k.startsWith("ch_")) champs[k.slice(3)] = String(v);
+      const r2 = await appel(env, "POST", null, { action: "signer", jeton, doc, nom: String(f.get("nom") || ""), accepte: !!f.get("accepte"), champs, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
+      if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=signe#documents");
+      return redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "").slice(0, 200)) + "#doc-" + encodeURIComponent(doc));
+    }
+    if (action === "deposer") {
+      const doc = String(f.get("doc") || ""), fic = f.get("fichier");
+      const ko = (t) => redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(t) + "#doc-" + encodeURIComponent(doc));
+      if (!fic || typeof fic === "string" || !fic.size) return ko("Merci de choisir le fichier du document sign\xE9.");
+      if (fic.size > 8 * 1024 * 1024) return ko("Le fichier d\xE9passe 8 Mo : merci de l'all\xE9ger (scan en noir et blanc ou en PDF).");
+      const oct = new Uint8Array(await fic.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < oct.length; i += 32768) bin += String.fromCharCode.apply(null, oct.subarray(i, i + 32768));
+      const r2 = await appel(env, "POST", null, { action: "deposer", jeton, doc, nom: String(fic.name || ""), type: String(fic.type || ""), contenu: btoa(bin), ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" }, 6e4);
+      if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=depose#documents");
+      return ko(String(r2.data && r2.data.error || "Le document n'a pas pu \xEAtre envoy\xE9. Merci de r\xE9essayer.").slice(0, 200));
     }
     if (action === "adhesion") {
       const g = (k) => String(f.get(k) || "");
@@ -1982,6 +2062,13 @@ async function routeSejour(request, env, url) {
     }
     return redirige("/sejour/" + jeton);
   }
+  if (action === "document" && request.method === "GET") {
+    const r3 = await appel(env, "GET", { jeton });
+    if (r3.status === 404 || r3.status === 400) return introuvable();
+    if (r3.status !== 200) return indisponible();
+    if (r3.data.annulee || r3.data.acces === "bulletin") return redirige("/sejour/" + jeton);
+    return pageDocument(r3.data, docId) || introuvable();
+  }
   if (action) return redirige("/sejour/" + jeton);
   let msg = "";
   const p = url.searchParams;
@@ -1990,6 +2077,9 @@ async function routeSejour(request, env, url) {
     msg = v.status === 200 && (v.data.enregistres || []).length ? `<div class="msg m-ok">Merci ! Votre paiement de ${eur(v.data.enregistres.reduce((s, x) => s + x, 0))} a bien \xE9t\xE9 re\xE7u.</div>` : `<div class="msg m-info">Merci ! Votre paiement est en cours de validation ; il appara\xEEtra ici dans quelques minutes.</div>`;
   } else if (p.get("paiement") === "erreur") msg = `<div class="msg m-err">Le paiement n'a pas abouti. Aucun montant n'a \xE9t\xE9 d\xE9bit\xE9 ; vous pouvez r\xE9essayer.</div>`;
   else if (p.get("ok") === "adhesion") msg = `<div class="msg m-ok">Merci, votre adh\xE9sion est enregistr\xE9e.</div>`;
+  else if (p.get("ok") === "signe") msg = `<div class="msg m-ok">Merci, le document est sign\xE9.</div>`;
+  else if (p.get("ok") === "depose") msg = `<div class="msg m-ok">Merci, le document sign\xE9 est bien re\xE7u. L'association le v\xE9rifiera.</div>`;
+  else if (p.get("err") === "document") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le document n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
   else if (p.get("err") === "acces") msg = `<div class="msg m-err">${esc(p.get("detail") || "Merci de remplir d'abord votre bulletin d'adh\xE9sion.")}</div>`;
   else if (p.get("err") === "adhesion") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le bulletin n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
   else if (p.get("ok") === "contrat") msg =`<div class="msg m-ok">Merci, le contrat est accept\xE9.</div>`;

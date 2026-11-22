@@ -394,6 +394,152 @@ async function etatAdhesion(sb: any, r: any, cfg: any) {
   return { aFaire, cotisation, montant, payee, remplie, type, acces, ancien, derniere: prec.map((a: any) => String(a.annee || "")).sort().pop() || "" };
 }
 
+// ----- Les trois documents obligatoires pour valider une réservation -----
+// Chacun se signe en ligne (nom tapé + case cochée, horodaté avec l'IP) ou par dépôt du document imprimé, signé et scanné.
+// Dans les textes : « ## » = intertitre, « • » = puce, ligne vide = nouveau paragraphe.
+const DOCS_RESA = [
+  {
+    id: "principe", titre: "Principe locatif du Chalet Bellevue",
+    case: "J'ai lu le principe locatif du Chalet Bellevue et je l'accepte.",
+    champs: [] as { id: string; lib: string }[],
+    texte: `Toute location du Chalet Bellevue se fait en cinq étapes, de la demande en ligne à la facture. L'adhésion annuelle à l'association A.C.T.E.S. (30 €) est obligatoire pour profiter de la location : A.C.T.E.S. est une association loi 1901 et le chalet est réservé à ses adhérents.
+
+## Les étapes de la réservation
+
+1. Votre demande : vous choisissez vos dates et envoyez votre demande depuis la page Réservation du site www.chalet-bellevue.fr.
+2. Votre contrat de réservation : après validation par l'association, vous recevez par e-mail votre contrat de réservation et un code d'accès à votre espace séjour. Il précise vos coordonnées, les dates du séjour, le montant du séjour et la cotisation annuelle de 30 €.
+3. Votre adhésion : vous remplissez dans votre espace séjour le bulletin de première adhésion ou de renouvellement. Cette étape est obligatoire avant toutes les autres.
+4. Les documents et le règlement : vous signez les trois documents de la réservation (ce principe locatif, la convention d'utilisation et la convention de mise à disposition « sécurité »), en ligne ou en envoyant chaque document signé et scanné. Vous réglez ensuite l'acompte, qui comprend la cotisation.
+5. La confirmation : vous recevez par e-mail la confirmation de réception et la facture du séjour.
+
+## Règlement
+
+• La facture doit être réglée en totalité au plus tard un mois avant le début du séjour.
+• Par chèque à l'ordre de A.C.T.E.S., à recevoir au plus tard un mois avant le début du séjour.
+• Par virement : IBAN FR76 1333 5004 0108 9357 5932 919 — BIC CEPAFRPP333 (Caisse d'Épargne Aquitaine Poitou-Charentes).
+• Par carte bancaire, en ligne avec HelloAsso, depuis votre espace séjour.
+• Une caution de 500 € et une caution ménage de 130 € sont demandées.`,
+  },
+  {
+    id: "utilisation", titre: "Convention d'utilisation du Chalet Bellevue",
+    case: "J'ai lu la convention d'utilisation et le règlement intérieur du Chalet Bellevue, et je les accepte au nom de mon groupe.",
+    champs: [] as { id: string; lib: string }[],
+    texte: `Entre l'association A.C.T.E.S. (Association Culturelle des Travailleurs des Établissements Sociaux), association loi 1901 — RNA W161001594 — SIRET 514 697 473 00015, dont le siège est Place de l'Hôtel de Ville, 16160 Gond-Pontouvre, représentée par son Président, Serge Prieuré, et l'utilisateur désigné dans le contrat de réservation (association ou personne physique), il a été convenu ce qui suit.
+
+## Article 1 — Objet
+
+A.C.T.E.S., propriétaire du chalet d'accueil de groupes « Bellevue » à Bagnères-de-Luchon, le met à la disposition de l'utilisateur pour la période indiquée dans le contrat de réservation. L'utilisateur doit être adhérent d'A.C.T.E.S. et à jour de sa cotisation annuelle (30 €).
+
+## Article 2 — Nature du bâtiment
+
+Le chalet est situé 2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagnères-de-Luchon (avenue de Vénasque). C'est un centre de vacances agréé par la Direction départementale de la Jeunesse et des Sports de Toulouse sous le n° 031.042.089, établissement de type R, 5e catégorie.
+
+La maison compte 2 niveaux et 24 couchages. Au rez-de-chaussée : cuisine, salle à manger, salon, salle de bains (2 douches, 3 lavabos), WC, chambre 1 (1 lit 2 places de 140) et chambre 2 (2 lits de 90). À l'étage : salle de bains (2 douches, 2 lavabos), 2 WC, chambre 3 (6 couchages en lits superposés de 80), chambre 4 (4 couchages en lits superposés), chambre 5 (6 couchages en lits superposés) et chambre 6 (2 couchages en lits superposés et 2 lits de 90).
+
+• Chaque lit dispose d'une couette avec housse de protection et d'un oreiller ; les matelas sont protégés par des housses en coton. Merci d'apporter votre linge de lit.
+• Le lit supérieur des lits superposés est interdit aux enfants de moins de 7 ans.
+• Le chauffage et l'eau chaude sont produits par une chaudière au gaz, dont la réserve est au fond du jardin.
+• Un accès Wi-Fi gratuit est à votre disposition.
+• Le chalet est équipé d'une détection de fumées : il est interdit de fumer dans les locaux. Le diagnostic amiante est négatif.
+• Les animaux sont acceptés s'ils ont été déclarés à la réservation.
+
+## Article 3 — Incessibilité
+
+L'utilisateur s'engage à utiliser les locaux et le matériel dans le cadre de la mission que lui fixent ses statuts. La présente convention est incessible et intransmissible.
+
+## Article 4 — Loyer et période
+
+Le loyer est payable conformément au contrat de réservation annexé. L'arrivée se fait à partir de 16 h, le départ au plus tard à 10 h.
+
+• Une caution de 500 € et une caution ménage de 130 € sont à joindre au règlement de la réservation.
+• Une facture est adressée à l'utilisateur à réception du règlement.
+• La facture doit être réglée en totalité au plus tard un mois avant le début du séjour, par chèque, virement ou carte bancaire en ligne depuis l'espace séjour. Les chèques doivent être reçus par A.C.T.E.S. au plus tard un mois avant le début du séjour.
+
+## Article 5 — Charges et entretien
+
+• Le chauffage, l'éclairage et l'eau chaude sont compris dans le prix de la location.
+• Un lave-linge, un sèche-linge et un lave-vaisselle sont à la disposition de l'utilisateur.
+• L'utilisateur ne peut pas modifier l'agencement des locaux sans l'accord exprès d'A.C.T.E.S. Il répond des dégradations survenues pendant la durée de la convention, qui lui sont facturées.
+• L'utilisateur assure l'entretien courant du chalet et de ses équipements. À défaut, les frais de débarras, de ménage et de nettoyage sont à sa charge.
+• L'utilisateur souscrit une assurance responsabilité civile couvrant ses participants pendant le séjour.
+• Un état des lieux est établi à l'arrivée et au départ avec le représentant d'A.C.T.E.S. sur place.
+
+## Article 6 — Sécurité
+
+L'utilisateur s'engage à n'utiliser aucun autre mode de chauffage que ceux en place, ni les conduits de fumée existants ; à vérifier le bon état du matériel de sécurité (fermetures coup de poing des issues de secours, extincteurs, sirène d'alarme, détecteurs de fumées) ; à laisser libres les voies de dégagement de secours ; à respecter les consignes affichées pour les produits gras ; et à signer la convention de mise à disposition « sécurité ».
+
+## Article 7 — Durée de la convention
+
+La présente convention prend effet à la confirmation de la réservation. Elle peut être résiliée par l'une ou l'autre des parties, par lettre recommandée envoyée trois mois avant le début du séjour. Les sommes versées restent alors acquises à A.C.T.E.S.
+
+## Article 8 — Clause résolutoire
+
+À défaut de paiement de tout ou partie d'une échéance du loyer, et un mois après une mise en demeure de payer restée sans effet, la présente convention est résiliée de plein droit par A.C.T.E.S., sans qu'A.C.T.E.S. ait à justifier d'un préjudice.`,
+  },
+  {
+    id: "securite", titre: "Convention de mise à disposition — Sécurité",
+    case: "Je reconnais avoir été informé(e) des dispositions de sécurité de cette convention et je m'engage à les appliquer et à les faire appliquer par mon groupe.",
+    champs: [
+      { id: "assureur", lib: "Assureur (assurance extension villégiature)" },
+      { id: "police", lib: "N° de contrat d'assurance" },
+      { id: "evacuation", lib: "Personne désignée pour vérifier l'évacuation (nom et prénom)" },
+    ],
+    texte: `Cette convention règle la sécurité pendant l'utilisation du Chalet Bellevue, 2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagnères-de-Luchon. La personne qui la signe est appelée « l'organisateur ».
+
+## I — Avant l'utilisation des locaux
+
+L'organisateur déclare avoir souscrit une assurance (extension villégiature), dont il indique l'assureur et le numéro de contrat. Il s'engage à :
+
+• prendre connaissance des consignes générales de sécurité et des consignes particulières affichées dans le chalet, et les appliquer ;
+• visiter le chalet avec le représentant d'A.C.T.E.S. à la remise des clés, en particulier les locaux et les accès qui seront utilisés ;
+• repérer avec lui l'emplacement de l'alarme et des extincteurs, les itinéraires d'évacuation et les issues de secours ;
+• savoir utiliser les extincteurs et l'alarme.
+
+## II — Pendant l'utilisation des locaux
+
+L'organisateur s'engage à :
+
+• faire appliquer par tous les participants les consignes de sécurité et d'usage des équipements ;
+• laisser libres les voies de dégagement de secours ;
+• respecter les consignes d'usage affichées pour les produits gras ;
+• ne pas fumer et ne laisser personne fumer à l'intérieur du chalet ;
+• assumer la pleine responsabilité de l'application des règles de sécurité dans le chalet et ses abords.
+
+## Consignes d'évacuation
+
+• En cas d'incendie, l'évacuation du chalet doit être totale.
+• Une personne désignée par l'organisateur vérifie que tous les locaux sont vides, y compris ceux où l'on peut se trouver seul (sanitaires, WC, salles de bains).
+
+## Numéros d'urgence
+
+Sapeurs-pompiers : 18 · SAMU : 15 · Numéro d'urgence européen : 112 · A.C.T.E.S. : 05 45 69 25 00`,
+  },
+];
+/** Documents signés d'une réservation (une acceptation en ligne de l'ancien contrat vaut convention d'utilisation). */
+function docsSignes(r: any): Record<string, any> {
+  const s = { ...(r.documentsSignes || {}) };
+  if (!s.utilisation && r.contratAccepte) s.utilisation = { mode: "electronique", nom: r.contratAccepte.nom, le: r.contratAccepte.le };
+  return s;
+}
+const docsComplets = (r: any) => { const s = docsSignes(r); return DOCS_RESA.every((d) => !!s[d.id]); };
+const texteDoc = (d: any, cfg: any) => d.id === "utilisation" && cfg.reglement ? d.texte + "\n\n## Règlement intérieur\n\n" + String(cfg.reglement) : d.texte;
+const EXT_SCAN: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
+const BUCKET_DOCS = "documents-signes";
+
+/** Prévient le bureau quand les trois documents d'une réservation sont signés (une seule fois). */
+async function siDocsComplets(sb: any, r: any, s: Record<string, any>) {
+  if (r.documentsCompletsLe || !DOCS_RESA.every((d) => !!s[d.id])) return;
+  await fusionDoc(sb, "crm_actes_resas", r.id, { documentsCompletsLe: new Date().toISOString() });
+  if (!smtpConfigure()) return;
+  const dest = Deno.env.get("SMTP_USER");
+  if (!dest) return;
+  const lignes = DOCS_RESA.map((d) => "• " + d.titre + " : " + (s[d.id].mode === "scan" ? "document scanné reçu (" + (s[d.id].fichier && s[d.id].fichier.nom || "fichier") + ")" : "signé en ligne par " + s[d.id].nom) + " le " + new Date(s[d.id].le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }));
+  await envoyer({ to: dest, subject: "Documents signés : " + (r.groupe || r.contact || "réservation") + " (" + fd(r.debut) + ")",
+    body: "Bonjour,\n\nLes trois documents de la réservation de " + (r.groupe || r.contact || "") + " du " + fd(r.debut) + " au " + fd(r.fin) + " sont signés :\n\n" + lignes.join("\n")
+      + (s.securite && s.securite.champs ? "\n\nAssurance : " + (s.securite.champs.assureur || "") + " — contrat n° " + (s.securite.champs.police || "") + "\nPersonne désignée pour l'évacuation : " + (s.securite.champs.evacuation || "") : "")
+      + "\n\nLa réservation peut être validée.\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const secret = Deno.env.get("SITE_SECRET");
@@ -429,6 +575,10 @@ Deno.serve(async (req) => {
       echeancier: e.map((x: any) => ({ type: x.type, lib: x.lib, montant: x.montant, du: x.du, etat: x.etat, reste: x.reste })),
       caution: num((r.caution || {}).montant) || num(cfg.caution),
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
+      // Les trois documents obligatoires pour valider la réservation, et leur état de signature
+      documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, texte: texteDoc(d, cfg),
+        signe: s[d.id] ? { mode: s[d.id].mode, nom: s[d.id].nom || "", le: s[d.id].le, fichier: s[d.id].fichier ? s[d.id].fichier.nom : "" } : null })); })(),
+      documentsComplets: docsComplets(r),
       paiementEnLigne: helloassoConfigure(),
       // Organisation du séjour, remplie par le groupe : répartition des chambres, liste de choses à faire, activités.
       // Réservée à l'accès complet : tant que l'adhésion n'est pas remplie et réglée, rien n'est envoyé.
@@ -473,7 +623,7 @@ Deno.serve(async (req) => {
     if (r.statut === "annulee") return erreur("Cette réservation est annulée.", 409);
 
     // Accès à l'espace séjour selon l'adhésion : bulletin obligatoire d'abord, organisation seulement une fois la cotisation réglée.
-    if (["espace", "accepter", "payer"].includes(b.action)) {
+    if (["espace", "accepter", "payer", "signer", "deposer"].includes(b.action)) {
       const ea = await etatAdhesion(sb, r, cfg);
       if (ea.acces === "bulletin") return erreur("Merci de remplir d'abord votre bulletin d'adhésion.", 403);
       if (b.action === "espace" && ea.acces !== "complet") return erreur("L'organisation du séjour sera disponible dès réception de votre cotisation d'adhésion.", 403);
@@ -560,6 +710,68 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // Signature électronique d'un des trois documents : nom tapé, case cochée, champs obligatoires ; horodatée avec l'IP
+    // et l'empreinte du texte signé. La convention d'utilisation vaut aussi acceptation du contrat (affichée dans le logiciel).
+    if (b.action === "signer") {
+      const d = DOCS_RESA.find((x) => x.id === b.doc);
+      if (!d) return erreur("Document inconnu.");
+      const s = docsSignes(r);
+      if (s[d.id]) return json({ ok: true, deja: true });
+      const t = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+      const nom = t(b.nom, 120);
+      if (nom.length < 2) return erreur("Merci de signer en tapant votre prénom et votre nom.");
+      if (b.accepte !== true) return erreur("Merci de cocher la case d'acceptation.");
+      const champs: Record<string, string> = {};
+      for (const c of d.champs) {
+        champs[c.id] = t((b.champs || {})[c.id], 120);
+        if (champs[c.id].length < 2) return erreur("Merci de compléter : " + c.lib.toLowerCase() + ".");
+      }
+      const le = new Date().toISOString();
+      const rec = { mode: "electronique", nom, le, ip: t(b.ip, 60), ua: t(b.ua, 200), version: await empreinte(texteDoc(d, cfg)), ...(d.champs.length ? { champs } : {}) };
+      const ns = { ...(r.documentsSignes || {}), [d.id]: rec };
+      await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, ...(d.id === "utilisation" && !r.contratAccepte ? { contratAccepte: { le, nom, ip: rec.ip, ua: rec.ua, version: rec.version } } : {}) });
+      await siDocsComplets(sb, r, { ...s, [d.id]: rec });
+      return json({ ok: true });
+    }
+
+    // Dépôt du document imprimé, signé et scanné (PDF, JPG ou PNG, 8 Mo au plus) : rangé dans le stockage privé
+    // « documents-signes » et envoyé en pièce jointe au bureau.
+    if (b.action === "deposer") {
+      const d = DOCS_RESA.find((x) => x.id === b.doc);
+      if (!d) return erreur("Document inconnu.");
+      const s = docsSignes(r);
+      if (s[d.id]) return json({ ok: true, deja: true });
+      const type = String(b.type || "").toLowerCase(), ext = EXT_SCAN[type];
+      if (!ext) return erreur("Format accepté : PDF, JPG ou PNG.");
+      const b64 = String(b.contenu || "");
+      let octets: Uint8Array;
+      try { octets = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); } catch { return erreur("Le fichier n'a pas pu être lu."); }
+      if (octets.length < 1000) return erreur("Le fichier semble vide.");
+      if (octets.length > 8 * 1024 * 1024) return erreur("Le fichier dépasse 8 Mo : merci de l'alléger (scan en noir et blanc ou en PDF).");
+      const nomFichier = String(b.nom || d.id + "." + ext).replace(/[^\w.\- ()À-ÿ]/g, "_").slice(0, 120);
+      const le = new Date().toISOString();
+      const chemin = String(r.id) + "/" + d.id + "-" + le.replace(/[:.]/g, "-") + "." + ext;
+      let stocke = false;
+      try {
+        await sb.storage.createBucket(BUCKET_DOCS, { public: false }).catch(() => null);
+        const { error } = await sb.storage.from(BUCKET_DOCS).upload(chemin, octets, { contentType: type, upsert: false });
+        stocke = !error;
+        if (error) console.error("stockage document signé", error.message);
+      } catch (e) { console.error("stockage document signé", String((e as Error).message || e)); }
+      let envoye = false;
+      const dest = smtpConfigure() ? Deno.env.get("SMTP_USER") : "";
+      if (dest) {
+        await envoyer({ to: dest, subject: "Document signé reçu : " + d.titre + " — " + (r.groupe || r.contact || "réservation"),
+          body: "Bonjour,\n\nLe document « " + d.titre + " » signé et scanné vient d'être déposé dans l'espace séjour de " + (r.groupe || r.contact || "") + " (séjour du " + fd(r.debut) + " au " + fd(r.fin) + ").\nIl est en pièce jointe" + (stocke ? " et rangé dans le stockage « " + BUCKET_DOCS + " » (" + chemin + ")" : "") + ". Merci de vérifier qu'il est bien complété et signé.\n\nLe logiciel A.C.T.E.S",
+          attachments: [{ filename: nomFichier, content: b64, mimeType: type }] }).then(() => { envoye = true; }).catch((e) => console.error("envoi document signé", String(e)));
+      }
+      if (!stocke && !envoye) return erreur("Le document n'a pas pu être enregistré. Merci de réessayer ou de l'envoyer par e-mail à l'association.", 502);
+      const rec = { mode: "scan", le, ip: String(b.ip || "").slice(0, 60), ua: String(b.ua || "").slice(0, 200), fichier: { nom: nomFichier, type, taille: octets.length, chemin: stocke ? chemin : "" } };
+      await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...(r.documentsSignes || {}), [d.id]: rec } });
+      await siDocsComplets(sb, r, { ...s, [d.id]: rec });
+      return json({ ok: true });
+    }
+
     if (b.action === "accepter") {
       if (r.contratAccepte) return json({ ok: true, deja: true });
       const nom = String(b.nom || "").trim().slice(0, 120);
@@ -572,7 +784,7 @@ Deno.serve(async (req) => {
 
     if (b.action === "payer") {
       if (!helloassoConfigure()) return erreur("Le paiement en ligne n'est pas encore disponible : merci de régler par virement ou chèque.", 503);
-      if (!r.contratAccepte) return erreur("Merci d'accepter d'abord le contrat de location.", 409);
+      if (!docsComplets(r)) return erreur("Merci de signer d'abord les trois documents de la réservation.", 409);
       const e = echeancier(r, cfg);
       const type = b.type === "solde" ? "solde" : "acompte";
       const montant = type === "acompte" ? (e[0] ? e[0].reste : 0) : Math.max(0, reste(r));
