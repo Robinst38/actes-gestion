@@ -163,7 +163,9 @@
     save: async function (o) { var u = URL.createObjectURL(o.data instanceof Blob ? o.data : new Blob([o.data])); var a = document.createElement("a"); a.href = u; a.download = o.filename || "fichier"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); return { ok: true }; }
   };
   var permissions = { manage: async function () { return true; } };
-  var caps = { db: db, mcp: mcp, sample: sample, user: user, downloads: downloads, permissions: permissions, comments: null };
+  // Pas d'IA payante dans le logiciel : la lecture automatique des factures et l'assistant d'estimation
+  // (API Claude, facturée à l'usage) sont désactivés. Sans « sample », l'appli masque ces fonctions et tout le reste marche.
+  var caps = { db: db, mcp: mcp, sample: null, user: user, downloads: downloads, permissions: permissions, comments: null };
   window.claude = {
     use: async function (nom) { await pret; return caps.hasOwnProperty(nom) ? caps[nom] : null; }
   };

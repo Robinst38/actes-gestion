@@ -70,36 +70,10 @@ async function entreprise(sb: SupabaseClient): Promise<Record<string, any>> {
 }
 
 // ----- ia/index.ts -----
-// Lecture automatique des factures / tickets (scanner) et assistant d'estimation, via l'API Claude
+// Fonction désactivée : elle appelait l'API Claude, facturée à l'usage. Le logiciel n'utilise aucun service payant.
+// La vérification des documents signés passe par l'IA gratuite de Cloudflare (relais du site), pas par cette fonction.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  const qui = await autoriser(req, ["admin", "bureau"]);
-  if (!qui) return erreur("Non autorisé.", 401);
-  const cle = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!cle) return erreur("Lecture automatique non configurée (clé ANTHROPIC_API_KEY absente).", 503);
-  const { prompt, images = [], mode = "text", messages, system } = await req.json().catch(() => ({}));
-  const contenu: any[] = [];
-  for (const im of images.slice(0, 5)) {
-    if (im.mediaType === "application/pdf") contenu.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: im.data } });
-    else contenu.push({ type: "image", source: { type: "base64", media_type: im.mediaType || "image/jpeg", data: im.data } });
-  }
-  contenu.push({ type: "text", text: String(prompt || "") + (mode === "json" ? "\n\nRéponds uniquement avec un objet JSON valide, sans texte autour." : "") });
-  const corps = {
-    model: Deno.env.get("IA_MODEL") || "claude-haiku-5-5",
-    max_tokens: 2000,
-    ...(system ? { system } : {}),
-    messages: Array.isArray(messages) && messages.length ? messages : [{ role: "user", content: contenu }],
-  };
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": cle, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify(corps),
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) return erreur("Service IA : " + (d?.error?.message || r.status), 502);
-  const texte = (d.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-  if (mode !== "json") return json({ resultat: texte });
-  const m = texte.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-  try { return json({ resultat: m ? JSON.parse(m[0]) : null }); } catch { return json({ resultat: null }); }
+  return erreur("Lecture automatique non configurée : l'IA payante a été retirée du logiciel.", 503);
 });
