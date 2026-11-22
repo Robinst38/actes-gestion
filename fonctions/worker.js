@@ -1919,11 +1919,11 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
   if (d.reste > 0 && d.statut !== "demande") {
     h += `<section class="carte" id="paiement"><h2>Paiement</h2>`;
     if (!d.paiementEnLigne) {
-      h += `<p>Le r\xE8glement se fait par virement ou par ch\xE8que, selon les indications de l'association.</p>`;
+      h += `<p>Le r\xE8glement se fait par virement ou par ch\xE8que \xE0 l'ordre de A.C.T.E.S., selon les indications de l'association. Les ch\xE8ques doivent \xEAtre re\xE7us au plus tard un mois avant le d\xE9but du s\xE9jour.</p>`;
     } else if (!acc) {
       h += `<p>Le paiement en ligne sera disponible d\xE8s que vous aurez accept\xE9 le contrat ci-dessus.</p>`;
     } else {
-      h += `<p>Paiement s\xE9curis\xE9 par carte bancaire avec <b>HelloAsso</b>, la plateforme de paiement des associations.</p><div class="btns">`;
+      h += `<p>Paiement s\xE9curis\xE9 par carte bancaire avec <b>HelloAsso</b>, la plateforme de paiement des associations. Vous pouvez aussi r\xE9gler par ch\xE8que \xE0 l'ordre de A.C.T.E.S., \xE0 recevoir au plus tard un mois avant le d\xE9but du s\xE9jour, ou par virement.</p><div class="btns">`;
       if (acompte && acompte.reste > 0) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="acompte"><button class="btn btn-p" type="submit">Payer l'acompte : ${eur(acompte.reste)}</button></form>`;
       if (d.reste > 0 && (!acompte || acompte.reste <= 0 || solde && d.reste > acompte.reste)) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="solde"><button class="btn ${acompte && acompte.reste > 0 ? "btn-v" : "btn-p"}" type="submit">${acompte && acompte.reste > 0 ? "Tout r\xE9gler" : "Payer le solde"} : ${eur(d.reste)}</button></form>`;
       h += `</div><p class="k" style="margin-top:10px">HelloAsso est gratuit pour l'association ; une contribution volontaire au fonctionnement de HelloAsso peut vous \xEAtre propos\xE9e, vous pouvez la mettre \xE0 0 \u20AC.</p>`;
