@@ -1833,29 +1833,45 @@ var ETAT = { paye: ["R\xE9gl\xE9", "b-ok"], avenir: ["\xC0 r\xE9gler", "b-av"], 
 // Bulletin d'adhésion en ligne du nouvel adhérent (A.C.T.E.S.) : rempli une fois, puis remplacé par la confirmation
 function sectionAdhesion(d, base) {
   const a = d.adhesion || {}, cot = a.cotisation || 30;
-  if (a.fiche) return `<section class="carte" id="adhesion"><h2>Adh\xE9sion \xE0 l'association</h2><p class="msg m-ok" style="margin:0">✓ Bulletin d'adh\xE9sion enregistr\xE9 le ${esc(new Date(a.fiche.le).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long" }))} pour ${esc(a.fiche.prenom + " " + a.fiche.nom)}. Bienvenue dans l'association !</p></section>`;
-  const mots = String(a.contact || "").trim().split(/\s+/), nom = mots.length > 1 ? mots[mots.length - 1] : "", prenom = mots.length > 1 ? mots.slice(0, -1).join(" ") : mots[0] || "";
+  if (a.fiche) {
+    const quoi = a.fiche.type === "renouvellement" ? "Renouvellement d'adh\xE9sion enregistr\xE9" : "Bulletin d'adh\xE9sion enregistr\xE9";
+    const etatCot = a.payee ? `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-ok">R\xE9gl\xE9e</span></p>` : `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-av">\xC0 r\xE9gler</span> — elle est comprise dans l'acompte de votre r\xE9servation.</p>`;
+    return `<section class="carte" id="adhesion"><h2>Adh\xE9sion \xE0 l'association</h2><p class="msg m-ok" style="margin:0">✓ ${quoi} le ${esc(new Date(a.fiche.le).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long" }))} pour ${esc(a.fiche.prenom + " " + a.fiche.nom)}.${a.fiche.type === "renouvellement" ? " Merci de votre fid\xE9lit\xE9 !" : " Bienvenue dans l'association !"}</p>${etatCot}</section>`;
+  }
+  const P = a.type === "renouvellement" && a.precedente ? a.precedente : null;
+  const mots = String(a.contact || "").trim().split(/\s+/), nomC = mots.length > 1 ? mots[mots.length - 1] : "", prenomC = mots.length > 1 ? mots.slice(0, -1).join(" ") : mots[0] || "";
+  const nom = P && P.nom || nomC, prenom = P && P.prenom || prenomC;
   const champ = (id, lib, type, extra, val) => `<label for="adh-${id}">${lib}</label><input type="${type}" id="adh-${id}" name="${id}" ${extra} value="${esc(val || "")}">`;
-  return `<section class="carte" id="adhesion"><h2>Bulletin d'adh\xE9sion</h2>
+  // Champs de coordonnées : obligatoires pour une première adhésion ; pour un renouvellement, seulement si « modifiées » (vérifié par le serveur).
+  const req = P ? "" : "required ";
+  const coordonnees = `<div class="adh-grille"><div>${champ("naissance", "Date de naissance", "date", req, "")}</div><div>${champ("tel", "T\xE9l\xE9phone", "tel", req + 'maxlength="20" autocomplete="tel"', P ? "" : a.tel)}</div></div>
+${champ("adresse", "Adresse", "text", req + 'maxlength="160" autocomplete="street-address"', "")}
+<div class="adh-grille"><div>${champ("cp", "Code postal", "text", req + 'pattern="[0-9]{5}" maxlength="5" inputmode="numeric" autocomplete="postal-code"', "")}</div><div>${champ("ville", "Ville", "text", req + 'maxlength="80" autocomplete="address-level2"', "")}</div></div>
+${champ("email", "E-mail", "email", req + 'maxlength="120" autocomplete="email"', P ? "" : a.email)}`;
+  const tete = P ? `<section class="carte" id="adhesion"><h2>Renouvellement de votre adh\xE9sion</h2>
+<p>Vous \xEAtes d\xE9j\xE0 adh\xE9rent(e) d'<b>A.C.T.E.S.</b>${P.depuis ? " depuis " + esc(P.depuis) : ""}${P.derniere ? " (derni\xE8re adh\xE9sion : " + esc(P.derniere) + ")" : ""}. La cotisation annuelle (${cot} €) est obligatoire pour s\xE9journer au ${esc(d.chalet)} ; elle est comprise dans le montant de votre r\xE9servation. Il vous reste \xE0 confirmer votre renouvellement.</p>
+<form method="post" action="${base}/adhesion" class="adh"><input type="hidden" name="type" value="renouvellement">
+<div class="adh-grille"><div>${champ("nom", "Nom", "text", 'required maxlength="60" autocomplete="family-name"', nom)}</div><div>${champ("prenom", "Pr\xE9nom", "text", 'required maxlength="60" autocomplete="given-name"', prenom)}</div></div>
+<h3>Vos coordonn\xE9es</h3><div class="adh-ligne"><label class="coche"><input type="radio" name="coordonnees" value="inchangees" required checked> Inchang\xE9es${P.ville ? " (" + esc(P.ville) + ")" : ""}</label><label class="coche"><input type="radio" name="coordonnees" value="modifiees" id="adh-coord-mod"> Elles ont chang\xE9</label></div>
+<div class="adh-coord"><p class="k">Indiquez vos nouvelles coordonn\xE9es compl\xE8tes.</p>${coordonnees}</div>
+${champ("structure", "Groupe, club ou structure repr\xE9sent\xE9 (facultatif)", "text", 'maxlength="120"', d.groupe)}` : `<section class="carte" id="adhesion"><h2>Bulletin de premi\xE8re adh\xE9sion</h2>
 <p>L'adh\xE9sion annuelle \xE0 <b>A.C.T.E.S.</b> (${cot} €) est obligatoire pour s\xE9journer au ${esc(d.chalet)}. Elle est d\xE9j\xE0 comprise dans le montant de votre r\xE9servation : il vous reste seulement \xE0 remplir ce bulletin.</p>
-<form method="post" action="${base}/adhesion" class="adh">
+<form method="post" action="${base}/adhesion" class="adh"><input type="hidden" name="type" value="premiere">
 <div class="adh-ligne"><label class="coche"><input type="radio" name="civilite" value="Madame" required> Madame</label><label class="coche"><input type="radio" name="civilite" value="Monsieur"> Monsieur</label></div>
-<div class="adh-grille"><div>${champ("nom", "Nom", "text", 'required maxlength="60" autocomplete="family-name"', nom)}</div><div>${champ("prenom", "Pr\xE9nom", "text", 'required maxlength="60" autocomplete="given-name"', prenom)}</div>
-<div>${champ("naissance", "Date de naissance", "date", "required", "")}</div><div>${champ("tel", "T\xE9l\xE9phone", "tel", 'required maxlength="20" autocomplete="tel"', a.tel)}</div></div>
-${champ("adresse", "Adresse", "text", 'required maxlength="160" autocomplete="street-address"', "")}
-<div class="adh-grille"><div>${champ("cp", "Code postal", "text", 'required pattern="[0-9]{5}" maxlength="5" inputmode="numeric" autocomplete="postal-code"', "")}</div><div>${champ("ville", "Ville", "text", 'required maxlength="80" autocomplete="address-level2"', "")}</div></div>
-${champ("email", "E-mail", "email", 'required maxlength="120" autocomplete="email"', a.email)}
+<div class="adh-grille"><div>${champ("nom", "Nom", "text", 'required maxlength="60" autocomplete="family-name"', nom)}</div><div>${champ("prenom", "Pr\xE9nom", "text", 'required maxlength="60" autocomplete="given-name"', prenom)}</div></div>
+${coordonnees}
 ${champ("structure", "Groupe, club ou structure repr\xE9sent\xE9 (facultatif)", "text", 'maxlength="120"', d.groupe)}
-<label for="adh-source">Comment avez-vous connu le chalet ? (facultatif)</label><select id="adh-source" name="source"><option value="">— Choisir —</option><option>Site internet</option><option>Bouche-\xE0-oreille</option><option>Office de tourisme</option><option>Autre</option></select>
+<label for="adh-source">Comment avez-vous connu le chalet ? (facultatif)</label><select id="adh-source" name="source"><option value="">— Choisir —</option><option>Site internet</option><option>Bouche-\xE0-oreille</option><option>Office de tourisme</option><option>Autre</option></select>`;
+  return `${tete}
 <h3>Engagements</h3><ul class="adh-liste"><li>respecter les statuts de l'association et le r\xE8glement int\xE9rieur du chalet ;</li><li>respecter le calme entre 22 h et 8 h, par \xE9gard pour le voisinage ;</li><li>ne pas fumer \xE0 l'int\xE9rieur et respecter les consignes de s\xE9curit\xE9 incendie ;</li><li>trier les d\xE9chets et rendre le chalet rang\xE9, la vaisselle propre et les poubelles vid\xE9es ;</li><li>signaler sans tarder toute casse ou panne \xE0 un responsable de l'association ;</li><li>\xEAtre couvert par une assurance responsabilit\xE9 civile pendant le s\xE9jour.</li></ul>
-<label class="coche"><input type="checkbox" name="engagements" required> J'adh\xE8re \xE0 A.C.T.E.S. et j'accepte ces engagements, pour moi et pour mon groupe. La cotisation reste acquise \xE0 l'association, y compris en cas d'annulation du s\xE9jour.</label>
-<h3>Droit \xE0 l'image</h3><div class="adh-ligne"><label class="coche"><input type="radio" name="droitImage" value="oui" required> J'autorise</label><label class="coche"><input type="radio" name="droitImage" value="non"> Je n'autorise pas</label></div>
+<label class="coche"><input type="checkbox" name="engagements" required> ${P ? "Je renouvelle mon adh\xE9sion \xE0 A.C.T.E.S. et je confirme ces engagements" : "J'adh\xE8re \xE0 A.C.T.E.S. et j'accepte ces engagements"}, pour moi et pour mon groupe. La cotisation reste acquise \xE0 l'association, y compris en cas d'annulation du s\xE9jour.</label>
+<h3>Droit \xE0 l'image</h3><div class="adh-ligne">${P ? `<label class="coche"><input type="radio" name="droitImage" value="maintenir" required checked> Je garde mon choix pr\xE9c\xE9dent</label>` : ""}<label class="coche"><input type="radio" name="droitImage" value="oui"${P ? "" : " required"}> J'autorise</label><label class="coche"><input type="radio" name="droitImage" value="non"> Je n'autorise pas</label></div>
 <p class="k">A.C.T.E.S. peut utiliser les photos prises au chalet o\xF9 vous apparaissez pour sa communication (site, r\xE9seaux sociaux, affiches). Autorisation gratuite et r\xE9vocable \xE0 tout moment.</p>
 <label class="coche"><input type="checkbox" name="infosEmail"> J'accepte de recevoir les informations de l'association par e-mail.</label>
 <p class="k">Vos informations servent \xE0 g\xE9rer les adh\xE9sions, les r\xE9servations, la facturation et les obligations l\xE9gales de l'association. Seuls les membres du bureau y ont acc\xE8s. Elles sont conserv\xE9es 3 ans apr\xE8s votre dernier s\xE9jour (10 ans pour les pi\xE8ces comptables). Vous pouvez y acc\xE9der, les faire rectifier ou effacer en \xE9crivant \xE0 l'association.</p>
 ${champ("signature", "Signature : tapez votre pr\xE9nom et votre nom", "text", 'required minlength="2" maxlength="120" autocomplete="name"', "")}
-<div class="btns"><button class="btn btn-v" type="submit">Envoyer mon bulletin d'adh\xE9sion</button></div></form>
-<style>.adh label:not(.coche){display:block;margin:12px 0 4px}.adh input[type=date],.adh input[type=tel],.adh input[type=email],.adh select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--bord);border-radius:10px;background:#fff}.adh-grille{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.adh-ligne{display:flex;flex-wrap:wrap;gap:10px 22px;margin:6px 0}.adh h3{margin:20px 0 6px}.adh-liste{margin:0 0 10px;padding-left:20px}.adh .coche{margin:8px 0}@media(max-width:560px){.adh-grille{grid-template-columns:1fr}}</style></section>`;
+<div class="btns"><button class="btn btn-v" type="submit">${P ? "Confirmer mon renouvellement" : "Envoyer mon bulletin d'adh\xE9sion"}</button></div></form>
+<style>.adh:has(#adh-coord-mod:not(:checked)) .adh-coord{display:none}.adh-coord{border-left:3px solid var(--bord);padding-left:12px;margin:6px 0}.adh label:not(.coche){display:block;margin:12px 0 4px}.adh input[type=date],.adh input[type=tel],.adh input[type=email],.adh select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--bord);border-radius:10px;background:#fff}.adh-grille{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.adh-ligne{display:flex;flex-wrap:wrap;gap:10px 22px;margin:6px 0}.adh h3{margin:20px 0 6px}.adh-liste{margin:0 0 10px;padding-left:20px}.adh .coche{margin:8px 0}@media(max-width:560px){.adh-grille{grid-template-columns:1fr}}</style></section>`;
 }
 function vueSejour(d, jeton, msg) {
   const base = "/sejour/" + jeton;
@@ -1871,6 +1887,16 @@ function vueSejour(d, jeton, msg) {
 <div><div class="k">Dur\xE9e</div><div class="v">${d.nuits} nuit${d.nuits > 1 ? "s" : ""}</div></div>
 <div><div class="k">Personnes</div><div class="v">${d.personnes}</div></div></div>
 ${d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
+  // Accès selon l'adhésion (décidé par le serveur) : "bulletin" → formulaire obligatoire avant tout le reste ;
+  // "limite" → cotisation pas encore réglée : suivi de la réservation et règlement seulement ; "complet" → tout l'espace.
+  const acces = d.acces || "complet";
+  if (acces === "bulletin") {
+    h = h.replace(`<section class="carte"><h2>Votre s\xE9jour</h2>`, `<div class="msg m-info"><b>\xC9tape obligatoire :</b> remplissez votre ${d.adhesion && d.adhesion.type === "renouvellement" ? "renouvellement d'adh\xE9sion" : "bulletin d'adh\xE9sion"} ci-dessous. Le contrat, le paiement et l'organisation du s\xE9jour s'afficheront ensuite.</div><section class="carte"><h2>Votre s\xE9jour</h2>`);
+    h += sectionAdhesion(d, base);
+    h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
+    return h;
+  }
+  if (acces === "limite") h = h.replace(`<section class="carte"><h2>Votre s\xE9jour</h2>`, `<div class="msg m-info"><b>Acc\xE8s limit\xE9 :</b> votre cotisation d'adh\xE9sion n'est pas encore r\xE9gl\xE9e. Vous pouvez suivre votre r\xE9servation et la r\xE9gler ; l'organisation du s\xE9jour (chambres, \xE0 faire, activit\xE9s) s'ouvrira d\xE8s r\xE9ception de la cotisation.</div><section class="carte"><h2>Votre s\xE9jour</h2>`);
   if (d.total > 0) {
     h += `<section class="carte"><h2>Montant et r\xE8glement</h2><table>${lignes.map((l) => `<tr><td>${esc(l.lib)}</td><td class="r">${eur(l.montant)}</td></tr>`).join("")}
 <tr class="tot"><td>Total</td><td class="r">${eur(d.total)}</td></tr></table>
@@ -1904,7 +1930,7 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
     }
     h += `</section>`;
   }
-  if (d.statut !== "demande" && Array.isArray(d.chambres)) h += sectionOrganisation(d, base);
+  if (acces === "complet" && d.statut !== "demande" && Array.isArray(d.chambres)) h += sectionOrganisation(d, base);
   h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
   return h;
 }
@@ -1938,12 +1964,13 @@ async function routeSejour(request, env, url) {
     if (action === "accepter") {
       if (!f.get("accepte")) return redirige("/sejour/" + jeton + "?err=coche#contrat");
       const r2 = await appel(env, "POST", null, { action: "accepter", jeton, nom: String(f.get("nom") || ""), ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
-      return redirige("/sejour/" + jeton + (r2.status === 200 ? "?ok=contrat#paiement" : "?err=contrat#contrat"));
+      return redirige("/sejour/" + jeton + (r2.status === 200 ? "?ok=contrat#paiement" : r2.status === 403 ? "?err=acces#adhesion" : "?err=contrat#contrat"));
     }
     if (action === "adhesion") {
       const g = (k) => String(f.get(k) || "");
       const fiche = { civilite: g("civilite"), nom: g("nom"), prenom: g("prenom"), naissance: g("naissance"), adresse: g("adresse"), cp: g("cp"), ville: g("ville"),
-        tel: g("tel"), email: g("email"), structure: g("structure"), source: g("source"), droitImage: g("droitImage") === "oui", infosEmail: !!f.get("infosEmail"), engagements: !!f.get("engagements") };
+        tel: g("tel"), email: g("email"), structure: g("structure"), source: g("source"), droitImage: g("droitImage") === "maintenir" ? "maintenir" : g("droitImage") === "oui", infosEmail: !!f.get("infosEmail"), engagements: !!f.get("engagements"),
+        type: g("type") === "renouvellement" ? "renouvellement" : "premiere", coordonnees: g("coordonnees") === "modifiees" ? "modifiees" : "inchangees" };
       const r2 = await appel(env, "POST", null, { action: "adhesion", jeton, fiche, signature: g("signature"), ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
       if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=adhesion#adhesion");
       return redirige("/sejour/" + jeton + "?err=adhesion&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "").slice(0, 200)) + "#adhesion");
@@ -1962,7 +1989,8 @@ async function routeSejour(request, env, url) {
     const v = await appel(env, "POST", null, { action: "verifier", jeton, intentId: p.get("checkoutIntentId") || "" });
     msg = v.status === 200 && (v.data.enregistres || []).length ? `<div class="msg m-ok">Merci ! Votre paiement de ${eur(v.data.enregistres.reduce((s, x) => s + x, 0))} a bien \xE9t\xE9 re\xE7u.</div>` : `<div class="msg m-info">Merci ! Votre paiement est en cours de validation ; il appara\xEEtra ici dans quelques minutes.</div>`;
   } else if (p.get("paiement") === "erreur") msg = `<div class="msg m-err">Le paiement n'a pas abouti. Aucun montant n'a \xE9t\xE9 d\xE9bit\xE9 ; vous pouvez r\xE9essayer.</div>`;
-  else if (p.get("ok") === "adhesion") msg = `<div class="msg m-ok">Merci, votre bulletin d'adh\xE9sion est enregistr\xE9. Bienvenue dans l'association !</div>`;
+  else if (p.get("ok") === "adhesion") msg = `<div class="msg m-ok">Merci, votre adh\xE9sion est enregistr\xE9e.</div>`;
+  else if (p.get("err") === "acces") msg = `<div class="msg m-err">${esc(p.get("detail") || "Merci de remplir d'abord votre bulletin d'adh\xE9sion.")}</div>`;
   else if (p.get("err") === "adhesion") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le bulletin n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
   else if (p.get("ok") === "contrat") msg =`<div class="msg m-ok">Merci, le contrat est accept\xE9.</div>`;
   else if (p.get("err") === "coche") msg = `<div class="msg m-err">Merci de cocher la case d'acceptation.</div>`;

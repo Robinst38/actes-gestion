@@ -366,6 +366,34 @@ async function empreinte(t: string) {
   return Array.from(new Uint8Array(h)).slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Fiche adhérent (collection crm_adherents) : une par adresse e-mail. */
+async function adherentDe(sb: any, email: string) {
+  const m = String(email || "").trim().toLowerCase();
+  if (!m) return null;
+  return await lireDoc(sb, "crm_adherents", "adh_" + (await empreinte(m)));
+}
+
+/** État de l'adhésion pour une réservation et niveau d'accès à l'espace séjour :
+ *  - "bulletin" : séjour en cours avec adhésion à remplir → le bulletin est obligatoire avant tout le reste ;
+ *  - "limite"   : bulletin rempli mais cotisation pas encore réglée → seulement le suivi de la réservation et le règlement ;
+ *  - "complet"  : cotisation réglée (ou pas d'adhésion sur cette réservation). */
+async function etatAdhesion(sb: any, r: any, cfg: any) {
+  const lignes = (r.detailTarif || []).filter((l: any) => l.k === "adhesion");
+  const aFaire = lignes.length > 0;
+  const cotisation = num(cfg.adhesionSejour) || 30;
+  const montant = r2(lignes.reduce((s: number, l: any) => s + num(l.montant), 0)) || cotisation;
+  // Les paiements couvrent d'abord la cotisation (elle est comprise dans l'acompte) ; le bureau peut aussi la marquer réglée à la main.
+  const payee = !aFaire || !!r.adhesionPayeeLe || paye(r) >= montant - 0.009;
+  const enCours = r.statut !== "annulee" && (!r.fin || r.fin >= auj());
+  const remplie = !!r.adhesionFiche;
+  let ancien: any = null;
+  if (aFaire && !remplie) ancien = await adherentDe(sb, r.email).catch(() => null);
+  const prec = ancien ? (ancien.adhesions || []).filter((a: any) => a.resa !== String(r.id)) : [];
+  const type = remplie ? (r.adhesionFiche.type || "premiere") : prec.length ? "renouvellement" : "premiere";
+  const acces = aFaire && !remplie && enCours ? "bulletin" : !payee ? "limite" : "complet";
+  return { aFaire, cotisation, montant, payee, remplie, type, acces, ancien, derniere: prec.map((a: any) => String(a.annee || "")).sort().pop() || "" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const secret = Deno.env.get("SITE_SECRET");
@@ -391,7 +419,10 @@ Deno.serve(async (req) => {
     if (!r) return erreur("Séjour introuvable.", 404);
     if (r.statut === "annulee") return json({ annulee: true, chalet: cfg.nomChalet });
     const e = echeancier(r, cfg);
+    const ea = await etatAdhesion(sb, r, cfg);
+    const complet = ea.acces === "complet";
     return json({
+      acces: ea.acces,
       chalet: cfg.nomChalet, ville: cfg.ville, asso: ent.nom || "A.C.T.E.S", tel: cfg.telAsso || ent.tel || "", email: ent.email || "",
       groupe: r.groupe || "", contact: r.contact || "", debut: r.debut, fin: r.fin, nuits: nbN(r.debut, r.fin), personnes: pers(r),
       statut: r.statut, total: total(r), paye: paye(r), reste: Math.max(0, reste(r)), detail: r.detailTarif || [],
@@ -399,17 +430,25 @@ Deno.serve(async (req) => {
       caution: num((r.caution || {}).montant) || num(cfg.caution),
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
       paiementEnLigne: helloassoConfigure(),
-      // Organisation du séjour, remplie par le groupe : répartition des chambres, liste de choses à faire, activités
-      chambres: (cfg.chambres || []).map((c: any) => ({ id: String(c.id), nom: String(c.nom || ""), lits: Math.max(0, Math.min(20, num(c.lits))) })),
-      couchage: r.couchage || {},
-      programme: r.programme || { taches: [], activites: [] },
-      suggestions: String(cfg.activitesSuggerees || "").split("\n").map((x) => x.replace(/^[•\-–*]\s*/, "").trim()).filter(Boolean).slice(0, 30),
-      // Bulletin d'adhésion en ligne (nouvel adhérent) : à remplir une fois par l'adhérent qui réserve
+      // Organisation du séjour, remplie par le groupe : répartition des chambres, liste de choses à faire, activités.
+      // Réservée à l'accès complet : tant que l'adhésion n'est pas remplie et réglée, rien n'est envoyé.
+      ...(complet ? {
+        chambres: (cfg.chambres || []).map((c: any) => ({ id: String(c.id), nom: String(c.nom || ""), lits: Math.max(0, Math.min(20, num(c.lits))) })),
+        couchage: r.couchage || {},
+        programme: r.programme || { taches: [], activites: [] },
+        suggestions: String(cfg.activitesSuggerees || "").split("\n").map((x) => x.replace(/^[•\-–*]\s*/, "").trim()).filter(Boolean).slice(0, 30),
+      } : {}),
+      // Bulletin d'adhésion en ligne : première adhésion ou renouvellement, à remplir une fois par l'adhérent qui réserve.
+      // Pour un renouvellement, seules la ville et les années sont renvoyées (le lien de l'espace est partagé avec le groupe).
       adhesion: {
-        aFaire: (r.detailTarif || []).some((l: any) => l.k === "adhesion"),
-        cotisation: num(cfg.adhesionSejour) || 30,
-        fiche: r.adhesionFiche ? { le: r.adhesionFiche.le, nom: r.adhesionFiche.nom, prenom: r.adhesionFiche.prenom } : null,
+        aFaire: ea.aFaire, obligatoire: ea.acces === "bulletin", type: ea.type, payee: ea.payee, montant: ea.montant,
+        cotisation: ea.cotisation,
+        fiche: r.adhesionFiche ? { le: r.adhesionFiche.le, nom: r.adhesionFiche.nom, prenom: r.adhesionFiche.prenom, type: r.adhesionFiche.type || "premiere" } : null,
         contact: r.contact || "", email: r.email || "", tel: r.tel || "",
+        precedente: ea.type === "renouvellement" && ea.ancien ? {
+          nom: ea.ancien.nom || "", prenom: ea.ancien.prenom || "", ville: ea.ancien.ville || "",
+          depuis: String(ea.ancien.depuis || "").slice(0, 4), derniere: ea.derniere,
+        } : null,
       },
     });
   }
@@ -433,6 +472,13 @@ Deno.serve(async (req) => {
     if (!r) return erreur("Séjour introuvable.", 404);
     if (r.statut === "annulee") return erreur("Cette réservation est annulée.", 409);
 
+    // Accès à l'espace séjour selon l'adhésion : bulletin obligatoire d'abord, organisation seulement une fois la cotisation réglée.
+    if (["espace", "accepter", "payer"].includes(b.action)) {
+      const ea = await etatAdhesion(sb, r, cfg);
+      if (ea.acces === "bulletin") return erreur("Merci de remplir d'abord votre bulletin d'adhésion.", 403);
+      if (b.action === "espace" && ea.acces !== "complet") return erreur("L'organisation du séjour sera disponible dès réception de votre cotisation d'adhésion.", 403);
+    }
+
     if (b.action === "espace") {
       const txt = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
       const couchage: Record<string, string[]> = {};
@@ -454,7 +500,19 @@ Deno.serve(async (req) => {
     if (b.action === "adhesion") {
       if (r.adhesionFiche) return json({ ok: true, deja: true });
       const t = (v: unknown, n: number) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
-      const f = b.fiche || {};
+      let f = { ...(b.fiche || {}) };
+      // Renouvellement : l'adhérent est retrouvé par l'e-mail de la réservation ; s'il garde les mêmes coordonnées
+      // (ou son choix sur le droit à l'image), on reprend celles de sa fiche.
+      const ea = await etatAdhesion(sb, r, cfg);
+      const renouv = ea.type === "renouvellement" && !!ea.ancien;
+      if (renouv) {
+        const A = ea.ancien;
+        if (f.coordonnees !== "modifiees") f = { ...f, civilite: f.civilite || A.civilite, naissance: A.naissance, adresse: A.adresse, cp: A.cp, ville: A.ville, tel: A.tel, email: A.email };
+        if (!f.naissance) f.naissance = A.naissance;
+        if (!f.civilite) f.civilite = A.civilite;
+        if (f.droitImage === "maintenir") f.droitImage = A.droitImage === true;
+        if (!f.structure && A.structure) f.structure = A.structure;
+      }
       const fiche = {
         civilite: ["Madame", "Monsieur"].includes(f.civilite) ? f.civilite : "",
         nom: t(f.nom, 60).toUpperCase(), prenom: t(f.prenom, 60),
@@ -480,19 +538,21 @@ Deno.serve(async (req) => {
       if (signature.length < 2) return erreur("Merci de signer en tapant votre nom et prénom.");
       const le = new Date().toISOString();
       const version = await empreinte(String(cfg.reglement));
-      const enreg = { ...fiche, le, annee: le.slice(0, 4), cotisation: num(cfg.adhesionSejour) || 30, resa: String(r.id),
+      const type = renouv ? "renouvellement" : "premiere";
+      const enreg = { ...fiche, type, le, annee: le.slice(0, 4), cotisation: num(cfg.adhesionSejour) || 30, resa: String(r.id),
         signature: { nom: signature, le, ip: t(b.ip, 60), ua: t(b.ua, 200), version } };
       await fusionDoc(sb, "crm_actes_resas", r.id, { adhesionFiche: enreg });
-      const idAdh = "adh_" + (await empreinte(fiche.email));
-      const ancien = await lireDoc(sb, "crm_adherents", idAdh);
+      // Une fiche par adresse e-mail. Si l'adhérent qui renouvelle a changé d'e-mail, on met à jour sa fiche existante.
+      const idAdh = renouv && ea.ancien.id ? String(ea.ancien.id) : "adh_" + (await empreinte(fiche.email));
+      const ancien = renouv ? ea.ancien : await lireDoc(sb, "crm_adherents", idAdh);
       await ecrireDoc(sb, "crm_adherents", idAdh, {
         ...(ancien || {}), ...fiche, id: idAdh, depuis: (ancien && ancien.depuis) || le.slice(0, 10), majLe: le,
-        adhesions: [...((ancien && ancien.adhesions) || []).filter((a: any) => a.resa !== String(r.id)), { annee: enreg.annee, le, resa: String(r.id), cotisation: enreg.cotisation }],
+        adhesions: [...((ancien && ancien.adhesions) || []).filter((a: any) => a.resa !== String(r.id)), { annee: enreg.annee, le, resa: String(r.id), cotisation: enreg.cotisation, type }],
       });
       if (smtpConfigure()) {
         const dest = Deno.env.get("SMTP_USER");
-        if (dest) await envoyer({ to: dest, subject: "Nouvelle adhésion en ligne : " + fiche.prenom + " " + fiche.nom,
-          body: "Bonjour,\n\n" + fiche.civilite + " " + fiche.prenom + " " + fiche.nom + " vient de remplir son bulletin d'adhésion en ligne pour le séjour du " + fd(r.debut) + " au " + fd(r.fin) + ".\n\n"
+        if (dest) await envoyer({ to: dest, subject: (renouv ? "Renouvellement d'adhésion en ligne : " : "Nouvelle adhésion en ligne : ") + fiche.prenom + " " + fiche.nom,
+          body: "Bonjour,\n\n" + fiche.civilite + " " + fiche.prenom + " " + fiche.nom + " vient de remplir son bulletin " + (renouv ? "de renouvellement d'adhésion" : "d'adhésion") + " en ligne pour le séjour du " + fd(r.debut) + " au " + fd(r.fin) + ".\n\n"
             + "Adresse : " + fiche.adresse + ", " + fiche.cp + " " + fiche.ville + "\nTéléphone : " + fiche.tel + "\nE-mail : " + fiche.email + (fiche.structure ? "\nStructure : " + fiche.structure : "")
             + "\nDroit à l'image : " + (fiche.droitImage ? "autorisé" : "refusé") + "\nInformations par e-mail : " + (fiche.infosEmail ? "oui" : "non")
             + "\n\nLa fiche est enregistrée dans le logiciel (réservation et liste des adhérents).\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
