@@ -1883,41 +1883,45 @@ function docHtml(t) {
     return `<p>${l.map(esc).join("<br>")}</p>`;
   }).join("");
 }
-// Les trois documents obligatoires de la réservation : signature en ligne ou dépôt du document signé scanné
-function sectionDocuments(d, base) {
+// Les trois documents obligatoires de la réservation : signature en ligne des trois en une fois (code reçu par e-mail),
+// ou document imprimé, signé et renvoyé par e-mail à l'association (enregistré par l'équipe).
+function sectionDocuments(d, base, codeEnvoye) {
   const docs = d.documents || [];
   if (!docs.length) return "";
-  const faits = docs.filter((x) => x.signe).length;
+  const faits = docs.filter((x) => x.signe).length, reste = docs.filter((x) => !x.signe);
   const date = (iso) => esc(new Date(iso).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }));
+  const sig = d.signature || {};
   let h = `<section class="carte" id="documents"><h2>Documents \xE0 signer <span class="badge ${faits === docs.length ? "b-ok" : "b-av"}" style="vertical-align:middle">${faits} / ${docs.length}</span></h2>
-<p>Ces ${docs.length} documents sont <b>obligatoires pour valider votre r\xE9servation</b>. Pour chacun, au choix : signez en ligne, ou imprimez-le, signez-le et envoyez-le scann\xE9 (ou photographi\xE9).</p>`;
+<p>Ces ${docs.length} documents sont <b>obligatoires pour valider votre r\xE9servation</b>. Lisez-les, puis signez-les tous en une fois ci-dessous.</p>`;
   docs.forEach((x, i) => {
     h += `<div class="dsig${x.signe ? " fait" : ""}" id="doc-${esc(x.id)}"><h3><span class="dnum">${x.signe ? "✓" : i + 1}</span>${esc(x.titre)}</h3>`;
-    if (x.signe) {
-      h += x.signe.mode === "scan"
-        ? (x.signe.statut === "valide"
-          ? `<p class="msg m-ok" style="margin:0">✓ Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""} et valid\xE9.</p>`
-          : `<p class="msg m-info" style="margin:0">Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""} : en cours de v\xE9rification par l'association. Vous serez pr\xE9venu par e-mail s'il faut le renvoyer.</p>`)
-        : `<p class="msg m-ok" style="margin:0">✓ Sign\xE9 en ligne le ${date(x.signe.le)} par ${esc(x.signe.nom)}.</p>`;
-      h += `<details><summary>Relire le document</summary><div class="doc">${docHtml(x.texte)}</div></details></div>`;
-      return;
-    }
-    if (x.refus) h += `<p class="msg m-err" style="margin:0 0 8px"><b>Document \xE0 renvoyer.</b> ${esc(x.refus.motif)} Merci de le signer \xE0 nouveau, en ligne ou en renvoyant le document sign\xE9 et scann\xE9.</p>`;
-    h += `<details${i === docs.findIndex((y) => !y.signe) ? " open" : ""}><summary>Lire le document</summary><div class="doc">${docHtml(x.texte)}</div></details>
-<form method="post" action="${base}/signer" class="dform"><input type="hidden" name="doc" value="${esc(x.id)}">
-${(x.champs || []).map((c) => `<label for="ch-${esc(x.id)}-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="ch-${esc(x.id)}-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
-<label for="sig-${esc(x.id)}">Signature : tapez votre pr\xE9nom et votre nom</label><input type="text" id="sig-${esc(x.id)}" name="nom" required minlength="2" maxlength="120" autocomplete="name" value="">
-<label class="coche"><input type="checkbox" name="accepte" required> ${esc(x.case)}</label>
-<div class="btns"><button class="btn btn-v" type="submit">Signer en ligne</button></div></form>
-<details class="dscan"><summary>Ou envoyer le document sign\xE9 scann\xE9</summary>
-<p><a href="${base}/document/${esc(x.id)}" target="_blank" rel="noopener">Ouvrir le document \xE0 imprimer</a>, compl\xE9tez-le, signez-le, puis envoyez-le ici : un PDF, ou une photo par page (JPG ou PNG). 6 fichiers et 8 Mo au plus.</p>
-<form method="post" action="${base}/deposer" enctype="multipart/form-data"><input type="hidden" name="doc" value="${esc(x.id)}">
-<input type="file" name="fichier" accept="application/pdf,image/jpeg,image/png" multiple required>
-<div class="btns"><button class="btn btn-v" type="submit">Envoyer le document sign\xE9</button></div></form></details></div>`;
+    if (x.signe) h += `<p class="msg m-ok" style="margin:0 0 6px">✓ ${x.signe.mode === "email" ? "Document sign\xE9 re\xE7u par l'association" : "Sign\xE9 en ligne par " + esc(x.signe.nom)} le ${date(x.signe.le)}.</p>`;
+    h += `<details><summary>${x.signe ? "Relire le document" : "Lire le document"}</summary><div class="doc">${docHtml(x.texte)}</div></details>
+<p class="k" style="margin:4px 0 0"><a href="${base}/document/${esc(x.id)}" target="_blank" rel="noopener">Version \xE0 imprimer ou \xE0 t\xE9l\xE9charger (PDF)</a></p></div>`;
   });
-  return h + `<style>.dsig{border-top:1px solid var(--bord);padding:16px 0 6px}.dsig h3{display:flex;align-items:center;gap:10px;margin:0 0 10px}.dnum{width:26px;height:26px;flex:none;border-radius:50%;background:var(--vert);color:#fff;font-size:13px;display:inline-flex;align-items:center;justify-content:center}.dsig.fait .dnum{background:var(--ok)}.dsig details{margin:8px 0}.dsig summary{cursor:pointer;color:var(--vert2);font-weight:600}.dsig .doc{max-height:420px;overflow:auto;margin-top:8px}.dform label:not(.coche){display:block;margin:12px 0 4px}.dscan{background:#FDFBF7;border:1px dashed var(--bord);border-radius:10px;padding:10px 12px}.dscan input[type=file]{width:100%;margin:8px 0}</style></section>`;
+  if (reste.length) {
+    h += `<div class="dglob" id="signature"><h3>Signer en ligne ${reste.length > 1 ? "les " + reste.length + " documents en une fois" : "le document"}</h3>`;
+    if (sig.possible === false) {
+      h += `<p class="msg m-info" style="margin:0">La signature en ligne n'est pas disponible pour cette r\xE9servation : utilisez la version papier ci-dessous.</p>`;
+    } else if (!(codeEnvoye || sig.codeEnvoye)) {
+      h += `<p>Pour signer, nous vous envoyons un <b>code \xE0 6 chiffres</b> \xE0 l'adresse e-mail de la r\xE9servation${sig.email ? " (" + esc(sig.email) + ")" : ""}. Il prouve que c'est bien vous qui signez.</p>
+<form method="post" action="${base}/code"><div class="btns"><button class="btn btn-v" type="submit">Recevoir mon code de signature</button></div></form>`;
+    } else {
+      const champs = [].concat(...reste.map((x) => x.champs || []));
+      h += `<form method="post" action="${base}/signer-tout" class="dform">
+<label for="sg-code">Code re\xE7u par e-mail${sig.email ? " (" + esc(sig.email) + ")" : ""}</label><input type="text" id="sg-code" name="code" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="max-width:160px;letter-spacing:4px;font-size:20px">
+${champs.map((c) => `<label for="sg-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="sg-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
+<label for="sg-nom">Signature : tapez votre pr\xE9nom et votre nom</label><input type="text" id="sg-nom" name="nom" required minlength="3" maxlength="120" autocomplete="name">
+<label class="coche"><input type="checkbox" name="accepte" required> J'ai lu ${reste.map((x) => "\xAB\xA0" + esc(x.titre) + "\xA0\xBB").join(", ").replace(/, ([^,]*)$/, " et $1")}, et je ${reste.length > 1 ? "les " : "l'"}accepte au nom de mon groupe. Je reconnais que cette signature \xE9lectronique m'engage comme une signature manuscrite.</label>
+<div class="btns"><button class="btn btn-v" type="submit">Signer ${reste.length > 1 ? "les " + reste.length + " documents" : "le document"}</button></div>
+<p class="k" style="margin:8px 0 0">Vous recevrez par e-mail un exemplaire de chaque document sign\xE9. Seront enregistr\xE9s : votre nom, la date et l'heure, votre adresse IP et le texte exact sign\xE9. Pas re\xE7u le code ? V\xE9rifiez vos ind\xE9sirables ; vous pourrez en redemander un dans une minute.</p></form>
+<form method="post" action="${base}/code" style="margin-top:6px"><button class="lien" type="submit">Renvoyer un code</button></form>`;
+    }
+    h += `<details class="papier"><summary>Vous pr\xE9f\xE9rez signer sur papier ?</summary><p>Imprimez chaque document (liens \xAB\xA0Version \xE0 imprimer\xA0\xBB ci-dessus), compl\xE9tez-le, signez-le, puis envoyez-le (photo ou scan) par e-mail${d.email ? ` \xE0 <a href="mailto:${esc(d.email)}?subject=${encodeURIComponent("Documents sign\xE9s - " + (d.groupe || d.contact || "") + " - s\xE9jour du " + fdc(d.debut))}">${esc(d.email)}</a>` : " \xE0 l'association"}. L'association les enregistrera \xE0 r\xE9ception ; le paiement en ligne s'ouvrira ensuite.</p></details></div>`;
+  }
+  return h + `<style>.dsig{border-top:1px solid var(--bord);padding:14px 0 6px}.dsig h3{display:flex;align-items:center;gap:10px;margin:0 0 8px}.dnum{width:26px;height:26px;flex:none;border-radius:50%;background:var(--vert);color:#fff;font-size:13px;display:inline-flex;align-items:center;justify-content:center}.dsig.fait .dnum{background:var(--ok)}.dsig summary,.papier summary{cursor:pointer;color:var(--vert2);font-weight:600}.dsig .doc{max-height:420px;overflow:auto;margin-top:8px}.dglob{border:2px solid var(--vert);border-radius:12px;padding:14px 16px;margin-top:14px;background:#FBFAF6}.dglob h3{margin:0 0 8px}.dform label:not(.coche){display:block;margin:12px 0 4px}.papier{margin-top:12px;border-top:1px dashed var(--bord);padding-top:10px}.lien{background:none;border:0;padding:0;color:var(--vert2);text-decoration:underline;cursor:pointer;font:inherit;font-size:14px}</style></section>`;
 }
-// Version à imprimer d'un document (pour le signer à la main puis le renvoyer scanné)
+// Version à imprimer d'un document (pour le signer à la main puis le renvoyer par e-mail)
 function pageDocument(d, id) {
   const x = (d.documents || []).find((y) => y.id === id);
   if (!x) return null;
@@ -1998,143 +2002,73 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
   h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
   return h;
 }
-// ----- Vérification automatique des scans par l'IA gratuite de Cloudflare (Workers AI, comme le chat du site) -----
-// Une page = une image = un appel. Seules les photos et images (JPG, PNG) sont lues ; un PDF part en vérification par l'équipe.
-// Le serveur plafonne le nombre de pages par jour (quota gratuit partagé avec le chat). Toute erreur → vérification par l'équipe.
-var MODELE_VISION = "@cf/meta/llama-3.2-11b-vision-instruct";
-function jsonIA(t) {
-  const m = String(t || "").match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try { return JSON.parse(m[0]); } catch (e) { return null; }
-}
-async function lirePageIA(env, image, consigne) {
-  const run = () => env.AI.run(MODELE_VISION, { messages: [{ role: "user", content: consigne }], image, max_tokens: 220, temperature: 0 });
-  let out;
-  try { out = await run(); } catch (e) {
-    // Première utilisation du modèle : accepter la licence Meta (gratuite), puis réessayer une fois.
-    if (!/agree|licen/i.test(String(e && e.message || e))) throw e;
-    await env.AI.run(MODELE_VISION, { prompt: "agree" }).catch(() => null);
-    out = await run();
-  }
-  return jsonIA(out && (out.response || out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content));
-}
-async function verifierParIA(env, pre, fichiers) {
-  const aucune = (raison) => ({ auto: false, ok: false, problemes: raison ? [raison] : [] });
-  if (!env.AI) return aucune("");
-  if (fichiers.some((f) => f.type === "application/pdf")) return aucune("PDF : v\xE9rification par l'\xE9quipe");
-  if (!pre || !pre.autorise) return aucune(pre && pre.titre ? "Quota gratuit du jour atteint : v\xE9rification par l'\xE9quipe" : "");
-  const n = fichiers.length, champs = pre.champs || [];
-  const lues = [];
-  try {
-    for (let i = 0; i < n; i++) {
-      const consigne = `Tu contr\xF4les la page ${i + 1} sur ${n} d'un document papier scann\xE9 ou photographi\xE9. Document attendu : \xAB ${pre.titre} \xBB.
-R\xE9ponds uniquement par un objet JSON, sans autre texte :
-{"lisible": true ou false (la page enti\xE8re est visible et le texte est net),
-"titre": true ou false (le titre \xAB ${pre.titre} \xBB appara\xEEt sur cette page),
-"signature": true ou false (une signature manuscrite \xE0 l'encre est pr\xE9sente sur cette page),
-"dateEtLieu": true ou false (une ligne \xAB Fait \xE0 \u2026 le \u2026 \xBB est remplie \xE0 la main sur cette page),
-"champs": ${champs.length ? `true, false ou null (les lignes \xAB ${champs.join(" \xBB, \xAB ")} \xBB sont remplies \xE0 la main ; null si elles ne sont pas sur cette page)` : "null"},
-"probleme": "une phrase courte en fran\xE7ais s'il y a un probl\xE8me, sinon vide"}`;
-      const v = await lirePageIA(env, "data:" + fichiers[i].type + ";base64," + fichiers[i].contenu, consigne);
-      if (!v) return aucune("La v\xE9rification automatique n'a pas pu lire la page " + (i + 1));
-      lues.push(v);
-    }
-  } catch (e) {
-    console.error("v\xE9rification IA", String(e && e.message || e));
-    return aucune("La v\xE9rification automatique n'a pas abouti");
-  }
-  const problemes = [];
-  lues.forEach((v, i) => {
-    if (v.lisible !== true) problemes.push(`Page ${i + 1} peu lisible ou coup\xE9e`);
-    if (typeof v.probleme === "string" && v.probleme.trim()) problemes.push(`Page ${i + 1} : ${v.probleme.trim().slice(0, 160)}`);
-  });
-  if (!lues.some((v) => v.titre === true)) problemes.push("Le titre du document attendu n'a pas \xE9t\xE9 reconnu");
-  if (!lues.some((v) => v.signature === true)) problemes.push("Aucune signature manuscrite reconnue");
-  if (!lues.some((v) => v.dateEtLieu === true)) problemes.push("Le lieu et la date de signature ne semblent pas remplis");
-  if (champs.length && (lues.some((v) => v.champs === false) || !lues.some((v) => v.champs === true))) problemes.push("Les champs \xE0 remplir (" + champs.join(", ").toLowerCase() + ") ne semblent pas tous remplis");
-  return { auto: true, ok: problemes.length === 0, problemes };
-}
-// ----- Dépôt des documents de l'équipe : www.chalet-bellevue.fr/equipe/documents?k=<clé privée envoyée au bureau> -----
-// Liste des réservations et de leurs 3 documents ; voir un scan, le valider ou le refuser (le client est alors prévenu par e-mail).
-var ST_DOC = { valide: ["Valid\xE9", "b-ok"], a_verifier: ["\xC0 v\xE9rifier", "b-av"], refuse: ["Refus\xE9", "b-re"], manquant: ["Manquant", "b-ma"] };
+// ----- Suivi des documents de l'équipe : www.chalet-bellevue.fr/equipe/documents?k=<clé privée envoyée au bureau> -----
+// Les 3 documents de chaque réservation ; l'équipe y enregistre ceux reçus signés par e-mail ou courrier.
 function pageDepot(data, k, f, msg) {
   const resas = data.resas || [];
-  const n = { a_verifier: 0, manquant: 0, refuse: 0, valide: 0 };
+  const n = { signe: 0, manquant: 0 };
   resas.forEach((r) => r.docs.forEach((x) => { n[x.statut] = (n[x.statut] || 0) + 1; }));
-  const garde = (r) => f === "tous" ? true : f === "incomplets" ? r.docs.some((x) => x.statut !== "valide") : r.docs.some((x) => x.statut === "a_verifier");
-  const liste = resas.filter(garde);
+  const liste = resas.filter((r) => f === "tous" || r.docs.some((x) => x.statut !== "signe"));
   const kq = "k=" + encodeURIComponent(k);
   const filtre = (v, lib) => `<a class="chip${f === v ? " on" : ""}" href="/equipe/documents?${kq}&f=${v}">${lib}</a>`;
-  const cache = `<input type="hidden" name="k" value="${esc(k)}"><input type="hidden" name="f" value="${esc(f)}">`;
-  let h = (msg || "") + `<p class="eyebrow">\xC9quipe A.C.T.E.S.</p><h1>D\xE9p\xF4t des documents</h1>
-<p class="sous">Les trois documents obligatoires de chaque r\xE9servation. Les signatures en ligne sont valid\xE9es d'office, comme les photos jug\xE9es lisibles, sign\xE9es et compl\xE8tes par la v\xE9rification automatique (IA gratuite de Cloudflare). Les autres documents attendent votre v\xE9rification.</p>
-<div class="kpis"><div><b>${n.a_verifier}</b>\xC0 v\xE9rifier</div><div><b>${n.manquant + n.refuse}</b>Manquants ou refus\xE9s</div><div><b>${n.valide}</b>Valid\xE9s</div></div>
-<div class="chips">${filtre("a_verifier", "\xC0 v\xE9rifier")}${filtre("incomplets", "Incomplets")}${filtre("tous", "Tous")}</div>`;
-  if (!liste.length) h += `<section class="carte"><p style="margin:0">${f === "a_verifier" ? "Aucun document \xE0 v\xE9rifier. \u{1F44D}" : "Aucune r\xE9servation."}</p></section>`;
+  const cache = (r, x) => `<input type="hidden" name="k" value="${esc(k)}"><input type="hidden" name="f" value="${esc(f)}"><input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}">`;
+  let h = (msg || "") + `<p class="eyebrow">\xC9quipe A.C.T.E.S.</p><h1>Documents des r\xE9servations</h1>
+<p class="sous">Les trois documents obligatoires de chaque r\xE9servation. Ceux sign\xE9s en ligne s'enregistrent seuls ; quand un client renvoie un document sign\xE9 par e-mail ou par courrier, enregistrez-le ici.</p>
+<div class="kpis"><div><b>${n.manquant}</b>Documents manquants</div><div><b>${n.signe}</b>Documents sign\xE9s</div></div>
+<div class="chips">${filtre("incomplets", "R\xE9servations incompl\xE8tes")}${filtre("tous", "Toutes")}</div>`;
+  if (!liste.length) h += `<section class="carte"><p style="margin:0">${f === "tous" ? "Aucune r\xE9servation." : "Tous les documents sont sign\xE9s."}</p></section>`;
   for (const r of liste) {
     h += `<section class="carte" id="r-${esc(r.id)}"><h2 style="margin-bottom:2px">${esc(r.groupe || r.contact)}</h2>
 <p class="k" style="margin:0 0 10px">${r.groupe && r.contact ? esc(r.contact) + " \xB7 " : ""}du ${esc(fdc(r.debut))} au ${esc(fdc(r.fin))}${r.email ? " \xB7 " + esc(r.email) : ""}</p>`;
     for (const x of r.docs) {
-      const st = ST_DOC[x.statut] || ST_DOC.manquant;
-      h += `<div class="ddep"><div class="ddep-t"><b>${esc(x.titre)}</b><span class="badge ${st[1]}">${st[0]}</span></div>`;
-      if (x.statut !== "manquant") {
-        h += `<p class="k" style="margin:4px 0">${x.mode === "scan" ? "Scan re\xE7u" : "Sign\xE9 en ligne" + (x.nom ? " par " + esc(x.nom) : "")} le ${esc(new Date(x.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }))}${x.fichier ? " \xB7 " + esc(x.fichier) : ""}${x.statut === "valide" ? x.valideur ? " \xB7 valid\xE9 par " + esc(x.valideur) : x.auto ? " \xB7 valid\xE9 automatiquement" : "" : ""}</p>`;
+      const ok = x.statut === "signe";
+      h += `<div class="ddep"><div class="ddep-t"><b>${esc(x.titre)}</b><span class="badge ${ok ? "b-ok" : "b-ma"}">${ok ? (x.mode === "email" ? "Re\xE7u par e-mail" : "Sign\xE9 en ligne") : "Manquant"}</span></div>`;
+      if (ok) {
+        h += `<p class="k" style="margin:4px 0">${x.mode === "email" ? "Enregistr\xE9 par " + esc(x.par) : "Par " + esc(x.nom)} le ${esc(new Date(x.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }))}${x.note ? " \xB7 " + esc(x.note) : ""}</p>`;
         if (x.champs) h += `<p class="k" style="margin:4px 0">${Object.entries(x.champs).map(([c, v]) => `${esc({ assureur: "Assureur", police: "Contrat n\xB0", evacuation: "\xC9vacuation" }[c] || c)} : <b>${esc(v)}</b>`).join(" \xB7 ")}</p>`;
-        if (x.statut === "a_verifier" && x.problemes && x.problemes.length) h += `<ul class="pb">${x.problemes.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
-        if (x.statut === "refuse" && x.motif) h += `<p class="k" style="margin:4px 0;color:#A33E22">Motif envoy\xE9 au client : ${esc(x.motif)}</p>`;
-        if (x.mode === "scan") {
-          h += `<div class="btns" style="margin:6px 0">${(x.pages || [x.stocke]).some(Boolean) ? (x.pages || [x.stocke]).map((ok, i, t) => ok ? `<a class="btn btn-s" href="/equipe/documents/fichier?${kq}&resa=${encodeURIComponent(r.id)}&doc=${encodeURIComponent(x.id)}&page=${i}" target="_blank" rel="noopener noreferrer">${t.length > 1 ? "Page " + (i + 1) : "Voir le document"}</a>` : "").join("") : `<span class="k">Fichier dans l'e-mail re\xE7u par le bureau</span>`}`;
-          if (x.statut === "a_verifier") h += `<form method="post" action="/equipe/documents/valider">${cache}<input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}"><input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par"><button class="btn btn-v" type="submit">✓ Conforme, valider</button></form>`;
-          h += `</div>`;
-          if (x.statut !== "refuse") h += `<details class="refus"><summary>Refuser et demander un nouvel envoi</summary><form method="post" action="/equipe/documents/refuser">${cache}<input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}">
-<label>Motif (envoy\xE9 au client par e-mail)</label><textarea name="motif" required minlength="3" maxlength="400" rows="2" placeholder="Ex. : la signature est absente en page 2 ; le scan est illisible."></textarea>
-<input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par"><div class="btns"><button class="btn btn-r" type="submit">Refuser et pr\xE9venir le client</button></div></form></details>`;
-        }
+        if (x.mode === "email") h += `<form method="post" action="/equipe/documents/retirer">${cache(r, x)}<button class="lien" type="submit">Annuler cet enregistrement</button></form>`;
+      } else {
+        h += `<form method="post" action="/equipe/documents/recu" class="recu">${cache(r, x)}<input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par" required><input type="text" name="note" maxlength="200" placeholder="Note (facultatif)"><button class="btn btn-v" type="submit">✓ Re\xE7u sign\xE9 par e-mail</button></form>`;
       }
       h += `</div>`;
     }
     h += `</section>`;
   }
-  h += `<style>.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 14px}.kpis div{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px;font-size:13px;color:var(--gris)}.kpis b{display:block;font-size:26px;color:var(--vert)}
+  h += `<style>.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0 0 14px}.kpis div{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px;font-size:13px;color:var(--gris)}.kpis b{display:block;font-size:26px;color:var(--vert)}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}.chip{border:1px solid var(--bord);background:#fff;border-radius:999px;padding:6px 14px;color:var(--vert);text-decoration:none;font-size:14px}.chip.on{background:var(--vert);color:#fff;border-color:var(--vert)}
-.ddep{border-top:1px solid var(--bord);padding:12px 0}.ddep-t{display:flex;justify-content:space-between;align-items:center;gap:10px}.ddep-t .badge{white-space:nowrap;flex:none}.b-ma{background:#EEE;color:#555}.pb{margin:6px 0;padding-left:20px;color:#8A5A12;font-size:14px}
-.ddep form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0}.par{max-width:150px;padding:9px 10px!important}.btn-s{background:#fff;border:1px solid var(--vert);color:var(--vert)}.btn-r{background:#A33E22;color:#fff}
-.refus{margin-top:6px}.refus summary{cursor:pointer;color:#A33E22;font-size:14px}.refus form{display:block}.refus textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--bord);border-radius:10px;margin:4px 0 8px}</style>`;
-  const res = page("D\xE9p\xF4t des documents", h);
+.ddep{border-top:1px solid var(--bord);padding:12px 0}.ddep-t{display:flex;justify-content:space-between;align-items:center;gap:10px}.ddep-t .badge{white-space:nowrap;flex:none}.b-ma{background:#EEE;color:#555}
+.recu{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.recu input{padding:9px 10px!important;border:1px solid var(--bord);border-radius:10px;font:inherit}.par{max-width:140px}.recu input[name=note]{flex:1;min-width:140px}
+.lien{background:none;border:0;padding:0;color:#A33E22;text-decoration:underline;cursor:pointer;font:inherit;font-size:13px}</style>`;
+  const res = page("Documents des r\xE9servations", h);
   res.headers.set("referrer-policy", "no-referrer");
   res.headers.set("cache-control", "no-store");
   return res;
 }
 async function routeEquipe(request, env, url) {
-  const m = /^\/equipe\/documents(\/(valider|refuser|fichier))?\/?$/.exec(url.pathname);
+  const m = /^\/equipe\/documents(\/(recu|retirer))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
   const action = m[2];
   if (request.method === "POST") {
     if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
     const fo = await request.formData().catch(() => null);
     const g = (x) => fo ? String(fo.get(x) || "") : "";
-    const k = g("k"), f = g("f") || "a_verifier", resa = g("resa");
+    const k = g("k"), f = g("f") || "incomplets", resa = g("resa");
     const retour = (q) => redirige("/equipe/documents?k=" + encodeURIComponent(k) + "&f=" + encodeURIComponent(f) + "&" + q + "#r-" + encodeURIComponent(resa));
-    if (action !== "valider" && action !== "refuser") return retour("");
-    const r2 = await appel(env, "POST", null, { action: action === "valider" ? "depot-valider" : "depot-refuser", k, resa, doc: g("doc"), par: g("par"), motif: g("motif") });
-    if (r2.status === 401) return new Response("Lien du d\xE9p\xF4t invalide.", { status: 401 });
+    if (!action) return retour("");
+    const r2 = await appel(env, "POST", null, { action: action === "recu" ? "depot-recu" : "depot-retirer", k, resa, doc: g("doc"), par: g("par"), note: g("note") });
+    if (r2.status === 401) return new Response("Lien invalide.", { status: 401 });
     if (r2.status !== 200) return retour("err=" + encodeURIComponent(String(r2.data && r2.data.error || "Erreur").slice(0, 200)));
-    return retour("ok=" + (action === "valider" ? "valide" : r2.data.mail ? "refuse" : "refuse-sans-mail"));
+    return retour("ok=" + action);
   }
   const k = url.searchParams.get("k") || "";
-  if (action === "fichier") {
-    const r2 = await appel(env, "POST", null, { action: "depot-fichier", k, resa: url.searchParams.get("resa") || "", doc: url.searchParams.get("doc") || "", page: url.searchParams.get("page") || "0" });
-    if (r2.status === 200 && /^https:\/\//.test(r2.data.url || "")) return new Response(null, { status: 303, headers: { location: r2.data.url, "referrer-policy": "no-referrer", "cache-control": "no-store" } });
-    return page("Document", `<h1>Document indisponible</h1><p class="sous">${esc(r2.data && r2.data.error || "Le fichier n'a pas pu \xEAtre ouvert.")}</p>`, { status: r2.status || 500 });
-  }
+  if (action) return redirige("/equipe/documents?k=" + encodeURIComponent(k));
   const r2 = await appel(env, "POST", null, { action: "depot", k }, 3e4);
-  if (r2.status === 401) return page("D\xE9p\xF4t des documents", `<h1>Lien invalide</h1><p class="sous">Utilisez le lien du d\xE9p\xF4t re\xE7u par e-mail par le bureau.</p>`, { status: 401 });
+  if (r2.status === 401) return page("Documents des r\xE9servations", `<h1>Lien invalide</h1><p class="sous">Utilisez le lien re\xE7u par e-mail par le bureau.</p>`, { status: 401 });
   if (r2.status !== 200) return indisponible();
-  const p = url.searchParams, f = ["a_verifier", "incomplets", "tous"].includes(p.get("f")) ? p.get("f") : "a_verifier";
+  const p = url.searchParams, f = p.get("f") === "tous" ? "tous" : "incomplets";
   let msg = "";
-  if (p.get("ok") === "valide") msg = `<div class="msg m-ok">Document valid\xE9.</div>`;
-  else if (p.get("ok") === "refuse") msg = `<div class="msg m-ok">Document refus\xE9 : le client a re\xE7u un e-mail pour le renvoyer.</div>`;
-  else if (p.get("ok") === "refuse-sans-mail") msg = `<div class="msg m-err">Document refus\xE9, mais l'e-mail au client n'a pas pu partir : pr\xE9venez-le directement.</div>`;
+  if (p.get("ok") === "recu") msg = `<div class="msg m-ok">Document enregistr\xE9 comme re\xE7u sign\xE9.</div>`;
+  else if (p.get("ok") === "retirer") msg = `<div class="msg m-ok">Enregistrement annul\xE9 : le document est de nouveau manquant.</div>`;
   else if (p.get("err")) msg = `<div class="msg m-err">${esc(p.get("err"))}</div>`;
   return pageDepot(r2.data, k, f, msg);
 }
@@ -2151,7 +2085,7 @@ async function routeSejour(request, env, url) {
     }
     return pageConnexion("", false);
   }
-  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace|adhesion|signer|deposer|document\/(principe|utilisation|securite)))?\/?$/.exec(url.pathname);
+  const m = /^\/sejour\/([a-f0-9]{24,64})(\/(accepter|payer|espace|adhesion|code|signer-tout|document\/(principe|utilisation|securite)))?\/?$/.exec(url.pathname);
   if (!m) return introuvable();
   const jeton = m[1], action = m[3] && m[3].startsWith("document/") ? "document" : m[3], docId = m[4];
   if (request.method === "POST" && action === "espace") {
@@ -2170,31 +2104,17 @@ async function routeSejour(request, env, url) {
       const r2 = await appel(env, "POST", null, { action: "accepter", jeton, nom: String(f.get("nom") || ""), ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
       return redirige("/sejour/" + jeton + (r2.status === 200 ? "?ok=contrat#paiement" : r2.status === 403 ? "?err=acces#adhesion" : "?err=contrat#contrat"));
     }
-    if (action === "signer") {
-      const doc = String(f.get("doc") || ""), champs = {};
-      for (const [k, v] of f.entries()) if (k.startsWith("ch_")) champs[k.slice(3)] = String(v);
-      const r2 = await appel(env, "POST", null, { action: "signer", jeton, doc, nom: String(f.get("nom") || ""), accepte: !!f.get("accepte"), champs, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
-      if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=signe#documents");
-      return redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "").slice(0, 200)) + "#doc-" + encodeURIComponent(doc));
+    if (action === "code") {
+      const r2 = await appel(env, "POST", null, { action: "code-signature", jeton });
+      if (r2.status === 200) return redirige("/sejour/" + jeton + "?code=envoye#signature");
+      return redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "Le code n'a pas pu \xEAtre envoy\xE9.").slice(0, 220)) + (r2.status === 429 ? "&code=envoye" : "") + "#signature");
     }
-    if (action === "deposer") {
-      const doc = String(f.get("doc") || ""), fics = f.getAll("fichier").filter((x) => x && typeof x !== "string" && x.size);
-      const ko = (t) => redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(t) + "#doc-" + encodeURIComponent(doc));
-      if (!fics.length) return ko("Merci de choisir le fichier du document sign\xE9.");
-      if (fics.length > 6) return ko("6 fichiers au plus par document (une photo par page, ou un seul PDF).");
-      if (fics.reduce((t, x) => t + x.size, 0) > 8 * 1024 * 1024) return ko("Les fichiers d\xE9passent 8 Mo en tout : merci de les all\xE9ger (photos moins lourdes, scan en noir et blanc ou en PDF).");
-      const fichiers = [];
-      for (const fic of fics) {
-        const oct = new Uint8Array(await fic.arrayBuffer());
-        let bin = "";
-        for (let i = 0; i < oct.length; i += 32768) bin += String.fromCharCode.apply(null, oct.subarray(i, i + 32768));
-        fichiers.push({ nom: String(fic.name || ""), type: String(fic.type || ""), contenu: btoa(bin) });
-      }
-      const pre = env.AI && !fichiers.some((x) => x.type === "application/pdf") ? await appel(env, "POST", null, { action: "pre-verif", jeton, doc, pages: fichiers.length }) : null;
-      const verif = await verifierParIA(env, pre && pre.status === 200 ? pre.data : null, fichiers);
-      const r2 = await appel(env, "POST", null, { action: "deposer", jeton, doc, fichiers, verif, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" }, 9e4);
-      if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=depose#documents");
-      return ko(String(r2.data && r2.data.error || "Le document n'a pas pu \xEAtre envoy\xE9. Merci de r\xE9essayer.").slice(0, 200));
+    if (action === "signer-tout") {
+      const champs = {};
+      for (const [k2, v] of f.entries()) if (k2.startsWith("ch_")) champs[k2.slice(3)] = String(v);
+      const r2 = await appel(env, "POST", null, { action: "signer-tout", jeton, code: String(f.get("code") || ""), nom: String(f.get("nom") || ""), accepte: !!f.get("accepte"), champs, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
+      if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=signe#documents");
+      return redirige("/sejour/" + jeton + "?code=envoye&err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "La signature n'a pas pu \xEAtre enregistr\xE9e.").slice(0, 220)) + "#signature");
     }
     if (action === "adhesion") {
       const g = (k) => String(f.get(k) || "");
@@ -2227,8 +2147,8 @@ async function routeSejour(request, env, url) {
     msg = v.status === 200 && (v.data.enregistres || []).length ? `<div class="msg m-ok">Merci ! Votre paiement de ${eur(v.data.enregistres.reduce((s, x) => s + x, 0))} a bien \xE9t\xE9 re\xE7u.</div>` : `<div class="msg m-info">Merci ! Votre paiement est en cours de validation ; il appara\xEEtra ici dans quelques minutes.</div>`;
   } else if (p.get("paiement") === "erreur") msg = `<div class="msg m-err">Le paiement n'a pas abouti. Aucun montant n'a \xE9t\xE9 d\xE9bit\xE9 ; vous pouvez r\xE9essayer.</div>`;
   else if (p.get("ok") === "adhesion") msg = `<div class="msg m-ok">Merci, votre adh\xE9sion est enregistr\xE9e.</div>`;
-  else if (p.get("ok") === "signe") msg = `<div class="msg m-ok">Merci, le document est sign\xE9.</div>`;
-  else if (p.get("ok") === "depose") msg = `<div class="msg m-ok">Merci, le document sign\xE9 est bien re\xE7u.</div>`;
+  else if (p.get("ok") === "signe") msg = `<div class="msg m-ok">Merci, vos documents sont sign\xE9s. Un exemplaire vous a \xE9t\xE9 envoy\xE9 par e-mail.</div>`;
+  else if (p.get("code") === "envoye" && !p.get("err")) msg = `<div class="msg m-ok">Code envoy\xE9 : consultez votre bo\xEEte e-mail (et les ind\xE9sirables).</div>`;
   else if (p.get("err") === "document") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le document n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
   else if (p.get("err") === "acces") msg = `<div class="msg m-err">${esc(p.get("detail") || "Merci de remplir d'abord votre bulletin d'adh\xE9sion.")}</div>`;
   else if (p.get("err") === "adhesion") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le bulletin n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
