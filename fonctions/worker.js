@@ -1895,11 +1895,14 @@ function sectionDocuments(d, base) {
     h += `<div class="dsig${x.signe ? " fait" : ""}" id="doc-${esc(x.id)}"><h3><span class="dnum">${x.signe ? "✓" : i + 1}</span>${esc(x.titre)}</h3>`;
     if (x.signe) {
       h += x.signe.mode === "scan"
-        ? `<p class="msg m-ok" style="margin:0">✓ Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""}. L'association le v\xE9rifiera.</p>`
+        ? (x.signe.statut === "valide"
+          ? `<p class="msg m-ok" style="margin:0">✓ Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""} et valid\xE9.</p>`
+          : `<p class="msg m-info" style="margin:0">Document sign\xE9 re\xE7u le ${date(x.signe.le)}${x.signe.fichier ? " (" + esc(x.signe.fichier) + ")" : ""} : en cours de v\xE9rification par l'association. Vous serez pr\xE9venu par e-mail s'il faut le renvoyer.</p>`)
         : `<p class="msg m-ok" style="margin:0">✓ Sign\xE9 en ligne le ${date(x.signe.le)} par ${esc(x.signe.nom)}.</p>`;
       h += `<details><summary>Relire le document</summary><div class="doc">${docHtml(x.texte)}</div></details></div>`;
       return;
     }
+    if (x.refus) h += `<p class="msg m-err" style="margin:0 0 8px"><b>Document \xE0 renvoyer.</b> ${esc(x.refus.motif)} Merci de le signer \xE0 nouveau, en ligne ou en renvoyant le document sign\xE9 et scann\xE9.</p>`;
     h += `<details${i === docs.findIndex((y) => !y.signe) ? " open" : ""}><summary>Lire le document</summary><div class="doc">${docHtml(x.texte)}</div></details>
 <form method="post" action="${base}/signer" class="dform"><input type="hidden" name="doc" value="${esc(x.id)}">
 ${(x.champs || []).map((c) => `<label for="ch-${esc(x.id)}-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="ch-${esc(x.id)}-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
@@ -1995,6 +1998,90 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
   h += `<p class="pied">${esc(d.asso)}${d.tel ? " \xB7 " + telLien(d.tel) : ""}${d.email ? ` \xB7 <a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : ""}</p>`;
   return h;
 }
+// ----- Dépôt des documents de l'équipe : www.chalet-bellevue.fr/equipe/documents?k=<clé privée envoyée au bureau> -----
+// Liste des réservations et de leurs 3 documents ; voir un scan, le valider ou le refuser (le client est alors prévenu par e-mail).
+var ST_DOC = { valide: ["Valid\xE9", "b-ok"], a_verifier: ["\xC0 v\xE9rifier", "b-av"], refuse: ["Refus\xE9", "b-re"], manquant: ["Manquant", "b-ma"] };
+function pageDepot(data, k, f, msg) {
+  const resas = data.resas || [];
+  const n = { a_verifier: 0, manquant: 0, refuse: 0, valide: 0 };
+  resas.forEach((r) => r.docs.forEach((x) => { n[x.statut] = (n[x.statut] || 0) + 1; }));
+  const garde = (r) => f === "tous" ? true : f === "incomplets" ? r.docs.some((x) => x.statut !== "valide") : r.docs.some((x) => x.statut === "a_verifier");
+  const liste = resas.filter(garde);
+  const kq = "k=" + encodeURIComponent(k);
+  const filtre = (v, lib) => `<a class="chip${f === v ? " on" : ""}" href="/equipe/documents?${kq}&f=${v}">${lib}</a>`;
+  const cache = `<input type="hidden" name="k" value="${esc(k)}"><input type="hidden" name="f" value="${esc(f)}">`;
+  let h = (msg || "") + `<p class="eyebrow">\xC9quipe A.C.T.E.S.</p><h1>D\xE9p\xF4t des documents</h1>
+<p class="sous">Les trois documents obligatoires de chaque r\xE9servation. Les signatures en ligne et les scans jug\xE9s conformes par la v\xE9rification automatique sont valid\xE9s d'office ; les autres attendent votre validation.</p>
+<div class="kpis"><div><b>${n.a_verifier}</b>\xC0 v\xE9rifier</div><div><b>${n.manquant + n.refuse}</b>Manquants ou refus\xE9s</div><div><b>${n.valide}</b>Valid\xE9s</div></div>
+<div class="chips">${filtre("a_verifier", "\xC0 v\xE9rifier")}${filtre("incomplets", "Incomplets")}${filtre("tous", "Tous")}</div>`;
+  if (!liste.length) h += `<section class="carte"><p style="margin:0">${f === "a_verifier" ? "Aucun document \xE0 v\xE9rifier. \u{1F44D}" : "Aucune r\xE9servation."}</p></section>`;
+  for (const r of liste) {
+    h += `<section class="carte" id="r-${esc(r.id)}"><h2 style="margin-bottom:2px">${esc(r.groupe || r.contact)}</h2>
+<p class="k" style="margin:0 0 10px">${r.groupe && r.contact ? esc(r.contact) + " \xB7 " : ""}du ${esc(fdc(r.debut))} au ${esc(fdc(r.fin))}${r.email ? " \xB7 " + esc(r.email) : ""}</p>`;
+    for (const x of r.docs) {
+      const st = ST_DOC[x.statut] || ST_DOC.manquant;
+      h += `<div class="ddep"><div class="ddep-t"><b>${esc(x.titre)}</b><span class="badge ${st[1]}">${st[0]}</span></div>`;
+      if (x.statut !== "manquant") {
+        h += `<p class="k" style="margin:4px 0">${x.mode === "scan" ? "Scan re\xE7u" : "Sign\xE9 en ligne" + (x.nom ? " par " + esc(x.nom) : "")} le ${esc(new Date(x.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }))}${x.fichier ? " \xB7 " + esc(x.fichier) : ""}${x.statut === "valide" ? x.valideur ? " \xB7 valid\xE9 par " + esc(x.valideur) : x.mode === "scan" && x.auto ? " \xB7 valid\xE9 automatiquement" : "" : ""}</p>`;
+        if (x.champs) h += `<p class="k" style="margin:4px 0">${Object.entries(x.champs).map(([c, v]) => `${esc({ assureur: "Assureur", police: "Contrat n\xB0", evacuation: "\xC9vacuation" }[c] || c)} : <b>${esc(v)}</b>`).join(" \xB7 ")}</p>`;
+        if (x.statut === "a_verifier" && x.problemes.length) h += `<ul class="pb">${x.problemes.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
+        if (x.statut === "refuse" && x.motif) h += `<p class="k" style="margin:4px 0;color:#A33E22">Motif envoy\xE9 au client : ${esc(x.motif)}</p>`;
+        if (x.mode === "scan") {
+          h += `<div class="btns" style="margin:6px 0">${x.stocke ? `<a class="btn btn-s" href="/equipe/documents/fichier?${kq}&resa=${encodeURIComponent(r.id)}&doc=${encodeURIComponent(x.id)}" target="_blank" rel="noopener noreferrer">Voir le document</a>` : `<span class="k">Fichier dans l'e-mail re\xE7u par le bureau</span>`}`;
+          if (x.statut === "a_verifier") h += `<form method="post" action="/equipe/documents/valider">${cache}<input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}"><input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par"><button class="btn btn-v" type="submit">✓ Conforme, valider</button></form>`;
+          h += `</div>`;
+          if (x.statut !== "refuse") h += `<details class="refus"><summary>Refuser et demander un nouvel envoi</summary><form method="post" action="/equipe/documents/refuser">${cache}<input type="hidden" name="resa" value="${esc(r.id)}"><input type="hidden" name="doc" value="${esc(x.id)}">
+<label>Motif (envoy\xE9 au client par e-mail)</label><textarea name="motif" required minlength="3" maxlength="400" rows="2" placeholder="Ex. : la signature est absente en page 2 ; le scan est illisible."></textarea>
+<input type="text" name="par" maxlength="60" placeholder="Votre pr\xE9nom" class="par"><div class="btns"><button class="btn btn-r" type="submit">Refuser et pr\xE9venir le client</button></div></form></details>`;
+        }
+      }
+      h += `</div>`;
+    }
+    h += `</section>`;
+  }
+  h += `<style>.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 14px}.kpis div{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px;font-size:13px;color:var(--gris)}.kpis b{display:block;font-size:26px;color:var(--vert)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}.chip{border:1px solid var(--bord);background:#fff;border-radius:999px;padding:6px 14px;color:var(--vert);text-decoration:none;font-size:14px}.chip.on{background:var(--vert);color:#fff;border-color:var(--vert)}
+.ddep{border-top:1px solid var(--bord);padding:12px 0}.ddep-t{display:flex;justify-content:space-between;align-items:center;gap:10px}.ddep-t .badge{white-space:nowrap;flex:none}.b-ma{background:#EEE;color:#555}.pb{margin:6px 0;padding-left:20px;color:#8A5A12;font-size:14px}
+.ddep form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0}.par{max-width:150px;padding:9px 10px!important}.btn-s{background:#fff;border:1px solid var(--vert);color:var(--vert)}.btn-r{background:#A33E22;color:#fff}
+.refus{margin-top:6px}.refus summary{cursor:pointer;color:#A33E22;font-size:14px}.refus form{display:block}.refus textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--bord);border-radius:10px;margin:4px 0 8px}</style>`;
+  const res = page("D\xE9p\xF4t des documents", h);
+  res.headers.set("referrer-policy", "no-referrer");
+  res.headers.set("cache-control", "no-store");
+  return res;
+}
+async function routeEquipe(request, env, url) {
+  const m = /^\/equipe\/documents(\/(valider|refuser|fichier))?\/?$/.exec(url.pathname);
+  if (!m) return introuvable();
+  const action = m[2];
+  if (request.method === "POST") {
+    if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
+    const fo = await request.formData().catch(() => null);
+    const g = (x) => fo ? String(fo.get(x) || "") : "";
+    const k = g("k"), f = g("f") || "a_verifier", resa = g("resa");
+    const retour = (q) => redirige("/equipe/documents?k=" + encodeURIComponent(k) + "&f=" + encodeURIComponent(f) + "&" + q + "#r-" + encodeURIComponent(resa));
+    if (action !== "valider" && action !== "refuser") return retour("");
+    const r2 = await appel(env, "POST", null, { action: action === "valider" ? "depot-valider" : "depot-refuser", k, resa, doc: g("doc"), par: g("par"), motif: g("motif") });
+    if (r2.status === 401) return new Response("Lien du d\xE9p\xF4t invalide.", { status: 401 });
+    if (r2.status !== 200) return retour("err=" + encodeURIComponent(String(r2.data && r2.data.error || "Erreur").slice(0, 200)));
+    return retour("ok=" + (action === "valider" ? "valide" : r2.data.mail ? "refuse" : "refuse-sans-mail"));
+  }
+  const k = url.searchParams.get("k") || "";
+  if (action === "fichier") {
+    const r2 = await appel(env, "POST", null, { action: "depot-fichier", k, resa: url.searchParams.get("resa") || "", doc: url.searchParams.get("doc") || "" });
+    if (r2.status === 200 && /^https:\/\//.test(r2.data.url || "")) return new Response(null, { status: 303, headers: { location: r2.data.url, "referrer-policy": "no-referrer", "cache-control": "no-store" } });
+    return page("Document", `<h1>Document indisponible</h1><p class="sous">${esc(r2.data && r2.data.error || "Le fichier n'a pas pu \xEAtre ouvert.")}</p>`, { status: r2.status || 500 });
+  }
+  const r2 = await appel(env, "POST", null, { action: "depot", k }, 3e4);
+  if (r2.status === 401) return page("D\xE9p\xF4t des documents", `<h1>Lien invalide</h1><p class="sous">Utilisez le lien du d\xE9p\xF4t re\xE7u par e-mail par le bureau.</p>`, { status: 401 });
+  if (r2.status !== 200) return indisponible();
+  const p = url.searchParams, f = ["a_verifier", "incomplets", "tous"].includes(p.get("f")) ? p.get("f") : "a_verifier";
+  let msg = "";
+  if (p.get("ok") === "valide") msg = `<div class="msg m-ok">Document valid\xE9.</div>`;
+  else if (p.get("ok") === "refuse") msg = `<div class="msg m-ok">Document refus\xE9 : le client a re\xE7u un e-mail pour le renvoyer.</div>`;
+  else if (p.get("ok") === "refuse-sans-mail") msg = `<div class="msg m-err">Document refus\xE9, mais l'e-mail au client n'a pas pu partir : pr\xE9venez-le directement.</div>`;
+  else if (p.get("err")) msg = `<div class="msg m-err">${esc(p.get("err"))}</div>`;
+  return pageDepot(r2.data, k, f, msg);
+}
 async function routeSejour(request, env, url) {
   if (/^\/sejour\/?$/.test(url.pathname) || url.pathname === "/sejour/connexion") {
     if (request.method === "POST" && url.pathname === "/sejour/connexion") {
@@ -2078,7 +2165,7 @@ async function routeSejour(request, env, url) {
   } else if (p.get("paiement") === "erreur") msg = `<div class="msg m-err">Le paiement n'a pas abouti. Aucun montant n'a \xE9t\xE9 d\xE9bit\xE9 ; vous pouvez r\xE9essayer.</div>`;
   else if (p.get("ok") === "adhesion") msg = `<div class="msg m-ok">Merci, votre adh\xE9sion est enregistr\xE9e.</div>`;
   else if (p.get("ok") === "signe") msg = `<div class="msg m-ok">Merci, le document est sign\xE9.</div>`;
-  else if (p.get("ok") === "depose") msg = `<div class="msg m-ok">Merci, le document sign\xE9 est bien re\xE7u. L'association le v\xE9rifiera.</div>`;
+  else if (p.get("ok") === "depose") msg = `<div class="msg m-ok">Merci, le document sign\xE9 est bien re\xE7u.</div>`;
   else if (p.get("err") === "document") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le document n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
   else if (p.get("err") === "acces") msg = `<div class="msg m-err">${esc(p.get("detail") || "Merci de remplir d'abord votre bulletin d'adh\xE9sion.")}</div>`;
   else if (p.get("err") === "adhesion") msg = `<div class="msg m-err">${esc(p.get("detail") || "Le bulletin n'a pas pu \xEAtre enregistr\xE9. Merci de r\xE9essayer.")}</div>`;
@@ -2709,6 +2796,7 @@ var worker_default = {
     if (ferme) return ferme;
     if (url.pathname === "/tarifs" || url.pathname === "/tarifs.html") return pageTarifs(request, env, ctx);
     if (/^\/sejour(\/|$)/.test(url.pathname)) return routeSejour(request, env, url);
+    if (/^\/equipe\/documents(\/|$)/.test(url.pathname)) return routeEquipe(request, env, url);
     if (url.pathname === "/livret" || url.pathname === "/livret/affiche" || url.pathname === "/livret/imprimer") return routeLivret(request, env, url);
     if (url.pathname === "/api/chat" && request.method === "POST") return routeChat(request, env, ctx);
     if (url.pathname === "/api/availability" && request.method === "GET") {
