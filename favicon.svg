@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<rect width="200" height="200" rx="44" fill="#1f3d2b"/>
+<g transform="translate(18,15) scale(0.82)">
+<circle cx="146" cy="54" r="12" fill="#b98d46"/>
+<polygon points="12,152 64,72 108,152" fill="#faf6ef" opacity="0.35"/>
+<polygon points="96,152 138,88 178,152" fill="#faf6ef" opacity="0.22"/>
+<rect x="38" y="181" width="124" height="5" rx="2.5" fill="#faf6ef" opacity="0.18"/>
+<polygon points="53,152 100,83 147,152" fill="#faf6ef"/>
+<polygon points="86,109 100,89 114,109 107,109 100,98 93,109" fill="#1f3d2b" opacity="0.92"/>
+<rect x="76" y="152" width="48" height="34" fill="#1f3d2b" stroke="#faf6ef" stroke-width="3"/>
+<rect x="81" y="160" width="10" height="10" rx="1.5" fill="#faf6ef" opacity="0.85"/>
+<rect x="109" y="160" width="10" height="10" rx="1.5" fill="#faf6ef" opacity="0.85"/>
+<path d="M92,186 V168 a8,8 0 0 1 16,0 v18 z" fill="#c0693e"/>
+</g>
+</svg>
