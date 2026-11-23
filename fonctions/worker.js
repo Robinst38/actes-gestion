@@ -2821,6 +2821,7 @@ async function synchroniser(env) {
   } catch (e) {
     console.error("blocages : synchro impossible", String(e));
   }
+  try { const mk = await DB.prepare("SELECT updated_at FROM site_content WHERE key = 'relais_sauvegarde'").first(); if (!mk || !mk.updated_at || Date.now() - Date.parse(mk.updated_at) > 72e6) { const noms = (await DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all()).results.map((t) => t.name).filter((n) => !/^(sessions|password_resets|feedback_tokens)$/.test(n)); const tables = {}; for (const n of noms) tables[n] = (await DB.prepare('SELECT * FROM "' + n + '"').all()).results; await versLogiciel(env, { action: "sauvegardeSite", tables }); await DB.prepare("INSERT INTO site_content (key, value, updated_at) VALUES ('relais_sauvegarde', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(String(noms.length), maintenant).run(); bilan.sauvegarde = noms.length; } } catch (e) { console.error("sauvegarde site", String(e)); }
   if (bilan.statuts || bilan.paiements || bilan.versLogiciel || bilan.recopies || bilan.tarifs || bilan.infos || bilan.blocages !== void 0 || bilan.maintenance !== void 0) console.log("synchro", JSON.stringify(bilan));
 }
 var worker_default = {

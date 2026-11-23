@@ -484,6 +484,17 @@ Deno.serve(async (req) => {
       return json({ ok: true, faits });
     }
 
+    // Sauvegarde quotidienne de la base du site (Cloudflare D1) envoyée par le relais → collection site_sauvegarde
+    // (incluse ensuite dans la sauvegarde hebdomadaire du logiciel vers Google Drive)
+    if (b.action === "sauvegardeSite") {
+      const tables = b.tables && typeof b.tables === "object" ? b.tables : {};
+      const resume: Record<string, number> = {};
+      for (const [nom, lignes] of Object.entries(tables)) resume[nom] = Array.isArray(lignes) ? lignes.length : 0;
+      const le = new Date().toISOString();
+      await ecrireDoc(sb, "site_sauvegarde", "derniere", { le, resume, tables });
+      return json({ ok: true, le, resume });
+    }
+
     // Dates bloquées après synchro site ↔ logiciel (le relais envoie la liste complète à venir) → collection chalet_blocages
     if (b.action === "blocages") {
       const dates = (Array.isArray(b.dates) ? b.dates : []).filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(d && d.date)))
