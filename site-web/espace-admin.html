@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Espace admin — Chalet Bellevue Luchon</title>
+<meta content="Espace d'administration du Chalet Bellevue." name="description"/>
+<link rel="canonical" href="https://www.chalet-bellevue.fr/espace-admin"/>
+<meta content="noindex, nofollow" name="robots"/>
+<meta property="og:title" content="Espace admin — Chalet Bellevue Luchon"/>
+<meta property="og:description" content="Espace d'administration du Chalet Bellevue."/>
+<meta property="og:image" content="https://www.chalet-bellevue.fr/hero-chalet-neige.jpg"/>
+<meta property="og:url" content="https://www.chalet-bellevue.fr/espace-admin"/>
+<meta property="og:type" content="website"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:image" content="https://www.chalet-bellevue.fr/hero-chalet-neige.jpg">
+<meta name="twitter:title" content="Espace admin — Chalet Bellevue Luchon"/>
+<meta name="twitter:description" content="Espace d'administration du Chalet Bellevue."/>
+<link rel="icon" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link href="fonts.css?v=20261021m" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css?v=20261024b"/>
+
+</head>
+<body>
+<header>
+<div class="nav-wrap container">
+<a class="brand" data-route="/" href="index.html">
+<span class="brand-mark">
+<svg height="26" viewbox="0 0 200 200" width="26">
+<circle cx="146" cy="54" fill="#b98d46" r="12"></circle>
+<polygon fill="#faf6ef" opacity="0.35" points="12,152 64,72 108,152"></polygon>
+<polygon fill="#faf6ef" opacity="0.22" points="96,152 138,88 178,152"></polygon>
+<rect fill="#faf6ef" height="5" opacity="0.18" rx="2.5" width="124" x="38" y="181"></rect>
+<polygon fill="#faf6ef" points="53,152 100,83 147,152"></polygon>
+<polygon fill="#1f3d2b" opacity="0.92" points="86,109 100,89 114,109 107,109 100,98 93,109"></polygon>
+<rect fill="#1f3d2b" height="34" stroke="#faf6ef" stroke-width="3" width="48" x="76" y="152"></rect>
+<rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="81" y="160"></rect>
+<rect fill="#faf6ef" height="10" opacity="0.85" rx="1.5" width="10" x="109" y="160"></rect>
+<path d="M92,186 V168 a8,8 0 0 1 16,0 v18 z" fill="#c0693e"></path>
+</svg>
+</span>
+<span class="brand-name">Chalet Bellevue</span>
+</a>
+<nav>
+<ul>
+<li><a data-route="/chalet" href="chalet.html">Le chalet &amp; équipements</a></li>
+<li><a data-route="/groupes" href="groupes.html">Groupes</a></li>
+<li><a data-route="/environs" href="environs.html">Environs</a></li>
+<li><a data-route="/tarifs" href="tarifs.html">Réservation / Tarif</a></li>
+<li><a data-route="/association" href="association.html">Association</a></li>
+<li><a data-route="/contact" href="contact.html">Contact</a></li>
+<li class="nav-account-mobile"><a href="login.html">Espace membres</a></li>
+<li class="nav-lang-mobile"><div class="lang-switch" aria-label="Langue / Language"><a href="index.html" hreflang="fr" lang="fr" aria-current="true">FR</a><a href="en/index.html" hreflang="en" lang="en">EN</a><a href="es/index.html" hreflang="es" lang="es">ES</a></div></li>
+</ul>
+</nav>
+<div class="nav-cta">
+<div class="lang-switch" aria-label="Langue / Language"><a href="index.html" hreflang="fr" lang="fr" aria-current="true">FR</a><a href="en/index.html" hreflang="en" lang="en">EN</a><a href="es/index.html" hreflang="es" lang="es">ES</a></div>
+<a aria-label="Espace membres" class="nav-account" data-route="/login" href="login.html" title="Espace membres">
+<svg fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="17"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+<span class="nav-account-label">Espace membres</span>
+</a>
+<a class="btn btn-dark" data-route="/reservation" href="reservation.html">Réserver</a>
+<button aria-label="Menu" class="menu-toggle"><span></span><span></span><span></span></button>
+</div>
+</div>
+</header>
+<main id="top">
+
+<div class="dash-shell">
+<div class="dash-header">
+<div class="container">
+<div class="dash-top-row">
+<div>
+<h1>Bonjour <span id="admin-name">...</span></h1>
+<p>Espace administration — Chalet Bellevue</p>
+</div>
+<button class="logout-btn" id="logout-btn" type="button">Se déconnecter</button>
+</div>
+<div class="dash-tabs">
+<button class="dash-tab is-active" data-tab="dispo" type="button">Disponibilité</button>
+<button class="dash-tab" data-tab="demandes" type="button">Demandes de réservation</button>
+<button class="dash-tab" data-tab="projets" type="button">Projets</button>
+<button class="dash-tab" data-tab="experience" type="button">Retour d'expérience</button>
+<button class="dash-tab" data-tab="contenu" type="button">Contenu du site</button>
+<button class="dash-tab" data-tab="plateformes" type="button">Plateformes</button>
+<button class="dash-tab" data-tab="compte" type="button">Mon compte</button>
+</div>
+</div>
+</div>
+<div class="container">
+<div class="must-change-banner" id="must-change-banner" style="display:none;">
+        Pour votre sécurité, merci de choisir un nouveau mot de passe (onglet « Mon compte »).
+      </div>
+<section class="dash-panel is-active" id="panel-dispo">
+<div class="dash-card">
+<h2>Gérer les disponibilités</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:16px;">Cliquez sur une ou plusieurs dates pour les sélectionner, puis bloquez-les ou débloquez-les. Les dates bloquées et les réservations validées apparaissent comme indisponibles sur la page de réservation ; les demandes en cours de traitement sont visibles ici mais ne bloquent pas les dates tant qu’elles ne sont pas validées.</p>
+<div style="display:flex; align-items:center; justify-content:space-between; max-width:340px; margin-bottom:10px;">
+<button class="btn-sm" id="adm-cal-prev" type="button">←</button>
+<strong id="adm-cal-label"></strong>
+<button class="btn-sm" id="adm-cal-next" type="button">→</button>
+</div>
+<div class="mini-cal" id="adm-cal"></div>
+<div class="cal-legend" aria-label="Légende du calendrier"><span class="lg-confirmed">Réservation validée</span><span class="lg-pending">Demande en cours de traitement</span><span class="lg-blocked">Bloquée manuellement</span></div>
+<div class="form-row" style="margin-top:18px; max-width:420px;">
+<div>
+<label for="adm-block-reason">Motif (si blocage)</label>
+<select id="adm-block-reason">
+<option value="reserved">Réservé</option>
+<option value="maintenance">Travaux / entretien</option>
+<option value="personal">Usage personnel</option>
+<option value="no_checkin">Arrivée impossible (jour de départ d'un autre séjour)</option>
+</select>
+</div>
+</div>
+<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+<button class="btn-sm primary" id="adm-block-btn" type="button">Bloquer la sélection</button>
+<button class="btn-sm danger" id="adm-unblock-btn" type="button">Débloquer la sélection</button>
+<button class="btn-sm" id="adm-clear-btn" type="button">Vider la sélection</button>
+</div>
+</div>
+<div class="dash-card">
+<h2>Bloquer une période (travaux, entretien…)</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:16px;">Choisissez la première et la dernière nuit à bloquer. La période devient indisponible sur la page de réservation et apparaît dans l’agenda Google « Chalet Bellevue - travaux et blocages ».</p>
+<div class="form-row" style="max-width:640px;">
+<div><label for="adm-per-from">Du (premier jour bloqué)</label><input id="adm-per-from" type="date"/></div>
+<div><label for="adm-per-to">Au (dernier jour bloqué, inclus)</label><input id="adm-per-to" type="date"/></div>
+<div><label for="adm-per-kind">Motif</label>
+<select id="adm-per-kind"><option value="Travaux">Travaux</option><option value="Entretien">Entretien</option><option value="Usage personnel">Usage personnel</option><option value="Autre">Autre</option></select></div>
+<div><label for="adm-per-label">Précision (optionnel)</label><input id="adm-per-label" maxlength="80" placeholder="Ex. réfection de la toiture" type="text"/></div>
+</div>
+<button class="btn-sm primary" id="adm-per-btn" type="button">Bloquer la période</button>
+<h3 style="margin:26px 0 8px; font-size:1rem;">Périodes bloquées à venir</h3>
+<div id="adm-periods-wrap"><p class="empty-state">Chargement...</p></div>
+</div>
+</section>
+<section class="dash-panel" id="panel-demandes">
+<div class="dash-card">
+<h2>Demandes de réservation</h2>
+<div id="adm-reservations-wrap"><p class="empty-state">Chargement...</p></div>
+</div>
+</section>
+
+<section class="dash-panel" id="panel-projets">
+<div class="dash-card">
+<h2>Nouveau projet</h2>
+<p style="color:var(--ink-soft); font-size:0.85rem; margin-bottom:10px;">Idées et projets pour les prochaines années — travaux, équipements, événements... Le champ notes accepte du texte libre (vous pouvez y écrire une liste à la main).</p>
+<form class="form-row" id="adm-new-project-form" style="align-items:end;">
+<div><label for="proj-title">Titre</label><input id="proj-title" placeholder="ex. Rénovation de la toiture" required="" type="text"/></div>
+<div><label for="proj-year">Année visée</label><select id="proj-year"></select></div>
+<div>
+<label for="proj-status">Statut</label>
+<select id="proj-status">
+<option value="idea">Idée</option>
+<option value="planned">Planifié</option>
+<option value="in_progress">En cours</option>
+<option value="done">Terminé</option>
+</select>
+</div>
+<div style="grid-column:1/-1;">
+<label for="proj-notes">Notes</label>
+<textarea id="proj-notes" placeholder="Détails, budget estimé, liste de tâches..." rows="3" style="width:100%; border:1px solid var(--stone-dark); border-radius:8px; padding:9px 11px; font-family:'Inter',sans-serif; font-size:0.9rem; box-sizing:border-box;"></textarea>
+</div>
+<div><button class="btn-sm primary" style="height:38px;" type="submit">Ajouter</button></div>
+</form>
+</div>
+<div class="dash-card">
+<h2>Projets par année</h2>
+<div id="adm-projects-wrap"><p class="empty-state">Chargement...</p></div>
+</div>
+</section>
+<section class="dash-panel" id="panel-experience">
+<p class="experience-intro">Deux espaces bien distincts : les <strong>Avis</strong> sont publics (affichés sur la page d'accueil après validation), les <strong>Retours client</strong> sont privés (jamais publiés, lus uniquement par l'équipe de l'association).</p>
+<div class="dash-card experience-block">
+<h2>Avis <span class="experience-tag experience-tag-public">Public</span></h2>
+<p style="color:var(--ink-soft); font-size:0.85rem; margin-bottom:10px;">Un avis envoyé depuis le site reste invisible sur la page d'accueil tant qu'il n'est pas approuvé ici — de quoi éviter le spam et les faux avis.</p>
+<div id="adm-reviews-wrap"><p class="empty-state">Chargement...</p></div>
+</div>
+<div class="dash-card experience-block">
+<h2>Retour client <span class="experience-tag experience-tag-private">Privé</span></h2>
+<p style="color:var(--ink-soft); font-size:0.85rem; margin-bottom:10px;">Message laissé par un locataire après son séjour — par le lien envoyé automatiquement par e-mail le lendemain du départ, ou depuis l'onglet "Retour d'amélioration" de son espace abonné.</p>
+<div id="adm-feedback-wrap"><p class="empty-state">Chargement...</p></div>
+</div>
+</section>
+<section class="dash-panel" id="panel-contenu">
+<div class="dash-card">
+<h2>Infos pratiques (espace abonnés)</h2>
+<p style="color:var(--ink-soft); font-size:0.85rem; margin-bottom:10px;">HTML simple accepté (paragraphes, liens, listes).</p>
+<textarea id="cc-practical-info" rows="8" style="width:100%; border:1px solid var(--stone-dark); border-radius:8px; padding:11px; font-family:'Inter',sans-serif; font-size:0.9rem; box-sizing:border-box;"></textarea>
+<button class="btn-sm primary" id="cc-save-info" style="margin-top:10px;" type="button">Enregistrer</button>
+</div>
+<div class="dash-card">
+<h2>Grille tarifaire</h2>
+<div id="cc-rates-wrap"><p class="empty-state">Chargement...</p></div>
+<button class="btn-sm" id="cc-add-rate" style="margin-top:12px;" type="button">+ Ajouter une période</button>
+</div>
+<div class="dash-card">
+<h2>Documents de l'association</h2>
+<form class="form-row" id="cc-doc-form" style="align-items:end;">
+<div><label for="doc-title">Titre</label><input id="doc-title" required="" type="text"/></div>
+<div>
+<label for="doc-category">Catégorie</label>
+<select id="doc-category">
+<option value="statuts">Statuts</option>
+<option value="compte-rendu">Compte-rendu</option>
+<option value="reglement">Règlement intérieur</option>
+<option value="general">Général</option>
+</select>
+</div>
+<div><label for="doc-file">Fichier</label><input id="doc-file" required="" type="file"/></div>
+<div><button class="btn-sm primary" style="height:38px;" type="submit">Ajouter</button></div>
+</form>
+<div id="cc-docs-wrap" style="margin-top:16px;"><p class="empty-state">Chargement...</p></div>
+</div>
+</section>
+<section class="dash-panel" id="panel-plateformes">
+<div class="dash-card">
+<h2>État de la synchronisation</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:6px;">Le site lit les calendriers de Booking.com et d'Airbnb toutes les 30 minutes : une réservation faite sur une plateforme bloque automatiquement les dates ici et sur l'autre plateforme.</p>
+<div id="pf-status"><p class="empty-state">Chargement...</p></div>
+<button class="btn-sm primary" id="pf-sync" style="margin-top:10px;" type="button">Synchroniser maintenant</button>
+<span id="pf-sync-msg" style="margin-left:10px; font-size:0.86rem;"></span>
+<div id="pf-feeds" style="margin-top:14px;"></div>
+</div>
+<div class="dash-card">
+<h2>1. Liens du site à coller dans les plateformes</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:10px;">À faire une seule fois par plateforme (ou si le jeton iCal change). Booking : Calendrier et tarifs › Synchroniser les calendriers. Airbnb : Calendrier › Disponibilités › Associer des calendriers. Nom conseillé : « Site Chalet Bellevue ».</p>
+<p id="pf-notoken" style="display:none; color:#a32020; font-size:0.88rem;">Aucun jeton iCal n'est défini sur le site.</p>
+<button class="btn-sm" id="pf-copy-booking" type="button">Copier le lien pour Booking</button>
+<button class="btn-sm" id="pf-copy-airbnb" type="button">Copier le lien pour Airbnb</button>
+<div id="pf-copy-msg" style="margin-top:8px; font-size:0.86rem;"></div>
+<p style="margin-top:8px; font-size:0.8rem; color:var(--ink-soft);">Ces liens contiennent une clé secrète : ils ne sont pas affichés et ne doivent pas être partagés.</p>
+</div>
+<div class="dash-card">
+<h2>2. Liens d'export des plateformes</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:10px;">Collez ici le lien d'export fourni par Booking.com (après l'ajout du calendrier du site) et celui d'Airbnb (étape 1 de « Me connecter à un autre site web »). Laissez vide pour garder le lien déjà enregistré.</p>
+<div class="form-row" style="align-items:end;">
+<div style="flex:1; min-width:260px;"><label for="pf-in-booking">Lien d'export Booking.com <span id="pf-saved-booking"></span></label><input autocomplete="off" id="pf-in-booking" placeholder="https://admin.booking.com/…ical…" style="-webkit-text-security:disc;" type="text"/></div>
+</div>
+<div class="form-row" style="align-items:end; margin-top:8px;">
+<div style="flex:1; min-width:260px;"><label for="pf-in-airbnb">Lien d'export Airbnb <span id="pf-saved-airbnb"></span></label><input autocomplete="off" id="pf-in-airbnb" placeholder="https://www.airbnb.fr/calendar/ical/…" style="-webkit-text-security:disc;" type="text"/></div>
+</div>
+<button class="btn-sm primary" id="pf-save" style="margin-top:12px;" type="button">Enregistrer et synchroniser</button>
+<span id="pf-save-msg" style="margin-left:10px; font-size:0.86rem;"></span>
+</div>
+</section>
+<section class="dash-panel" id="panel-compte">
+<div class="dash-card">
+<h2>Changer de mot de passe</h2>
+<form id="change-password-form" style="max-width:360px;">
+<div class="auth-field">
+<label for="cp-current">Mot de passe actuel</label>
+<input autocomplete="current-password" id="cp-current" required="" type="password"/>
+</div>
+<div class="auth-field">
+<label for="cp-new">Nouveau mot de passe</label>
+<input autocomplete="new-password" id="cp-new" minlength="8" required="" type="password"/>
+</div>
+<button class="btn-sm primary" type="submit">Mettre à jour</button>
+</form>
+</div>
+</section>
+</div>
+</div>
+
+</main>
+<footer>
+<div class="container">
+<div class="footer-grid">
+<div class="footer-brand">
+<h4>Chalet Bellevue</h4>
+<p>Chalet de 24 couchages à Bagnères-de-Luchon, géré par l'association A.C.T.E.S (loi 1901).</p>
+</div>
+<div>
+<h4>Navigation</h4>
+<ul>
+<li><a href="chalet.html">Le chalet &amp; équipements</a></li>
+<li><a href="groupes.html">Groupes &amp; événements</a></li>
+<li><a href="environs.html">Environs</a></li>
+<li><a href="tarifs.html">Réservation / Tarif</a></li>
+<li><a href="association.html">Association</a></li>
+<li><a href="contact.html">Contact</a></li>
+<li><a href="faq.html">Questions fréquentes</a></li>
+<li><a href="reservation.html">Réservation</a></li>
+<li><a href="login.html">Espace membres</a></li>
+</ul>
+</div>
+<div>
+<h4>Contact</h4>
+<ul>
+<li>Serge Prieuré</li>
+<li>2 Impasse du Poujaous<br/>Domaine Bellevue<br/>31110 Bagnères-de-Luchon</li>
+</ul>
+</div>
+<div>
+<h4>Localisation</h4>
+<div class="map-embed map-embed-gated" id="footer-map-wrap">
+<button type="button" class="map-load-btn" id="footer-map-load">📍 Afficher la carte</button>
+<p class="map-gate-note">Charge une carte Google Maps (dépose des cookies tiers).</p>
+</div>
+</div>
+</div>
+<div class="footer-bottom">
+<span>© <span id="year"></span> Chalet Bellevue — Association A.C.T.E.S. Tous droits réservés.</span>
+<span>
+<a href="mentions-legales.html">Mentions légales</a> ·
+        <a href="tarifs.html#conditions">CGV</a> ·
+        <a href="politique-confidentialite.html">Politique de confidentialité</a> ·
+        <a href="politique-confidentialite.html#cookies">Cookies</a> ·
+        <a href="politique-confidentialite.html#cookies" data-cookie-settings>Gérer les cookies</a>
+</span>
+</div>
+</div>
+</footer>
+<a class="btn btn-primary sticky-cta" href="reservation.html">Réserver le chalet</a>
+<script src="site.js?v=20261021k"></script>
+<script src="api-config.js?v=20261024b"></script>
+<script src="auth.js?v=20261021i"></script>
+<script src="espace-admin.js?v=20261119b"></script>
+<script src="admin-lastminute.js?v=20261021i"></script>
+<script src="admin-plateformes.js?v=20261123a"></script>
+<script defer src="consent.js?v=20261021i"></script>
+</body>
+</html>
