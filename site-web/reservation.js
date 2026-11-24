@@ -512,12 +512,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('bk-form-panel').classList.add('is-open');
     document.getElementById('bk-form-panel').dataset.method = 'online';
   });
-  // Réservation directe avec paiement de l'acompte (en test : visible seulement avec ?paiement=test dans l'adresse).
+  // Réservation directe avec paiement de l'acompte (visible par défaut ; ?paiement=off la masque sur cet appareil).
   try {
     const q = new URLSearchParams(location.search).get('paiement');
-    if (q === 'test') sessionStorage.setItem('bkDirect', '1');
-    if (q === 'off') sessionStorage.removeItem('bkDirect');
-    if (sessionStorage.getItem('bkDirect') === '1') {
+    if (q === 'test' || q === 'on') sessionStorage.removeItem('bkDirect');
+    if (q === 'off') sessionStorage.setItem('bkDirect', '0');
+    if (sessionStorage.getItem('bkDirect') !== '0') {
       const b = document.getElementById('bk-pay-online-btn');
       b.textContent = "Réserver et payer l'acompte en ligne";
       b.style.setProperty('display', 'inline-flex', 'important');
