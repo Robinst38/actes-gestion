@@ -33,14 +33,67 @@
       window.__actesDoitChoisirMdp = true; afficherChoixMdp(); return;
     }
     await chargerProfil();
+    if (profil && estPartage() && !prenomCourant()) {
+      var pen = ""; try { pen = sessionStorage.getItem("actes_prenom_saisi") || ""; sessionStorage.removeItem("actes_prenom_saisi"); } catch (e) {}
+      if (nettoiePrenom(pen)) enregistrerPrenom(pen); else { demanderPrenom(); return; }
+    }
     if (!profil) { ecranMessage("Accès non autorisé", "Le compte <b>" + esc(s.user.email) + "</b> n'a pas encore d'accès à l'application. Demande à un administrateur de l'ajouter.", true); return; }
     fermerEcran(); pretResolve(true); badgeCompte(); ecouterAutres();
   }
   sb.auth.onAuthStateChange(function (evt, s) {
     if (evt === "TOKEN_REFRESHED") { session = s; return; }
-    if (evt === "SIGNED_OUT") { session = null; location.reload(); return; }
+    if (evt === "SIGNED_OUT") { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf("actes_prenom:") === 0) localStorage.removeItem(k); }); } catch (e) {} session = null; location.reload(); return; }
     if (evt === "INITIAL_SESSION" || evt === "SIGNED_IN" || evt === "PASSWORD_RECOVERY" || evt === "USER_UPDATED") setTimeout(function () { surSession(s, evt); }, 0);
   });
+
+  /* ---------------- compte partagé bureau@ : prénom obligatoire (24/11/2026) ---------------- */
+  var COMPTE_PARTAGE = "bureau@chalet-bellevue.fr";
+  function estPartage() { return !!(session && session.user && String(session.user.email || "").toLowerCase() === COMPTE_PARTAGE); }
+  function nettoiePrenom(v) { var p = String(v || "").replace(/[<>"'`]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); return p.length >= 2 ? p : ""; }
+  function clePrenom() { return "actes_prenom:" + (session && session.user ? session.user.id : ""); }
+  function prenomCourant() { try { return estPartage() ? (localStorage.getItem(clePrenom()) || "") : ""; } catch (e) { return ""; } }
+  function enregistrerPrenom(p) { try { localStorage.setItem(clePrenom(), nettoiePrenom(p)); } catch (e) {} journal("connexion", "", "", {}); }
+  function auteur() { var p = prenomCourant(); return p ? p + " (compte bureau)" : ((profil && profil.nom) || (session && session.user.email) || ""); }
+  function demanderPrenom() {
+    quandPret(function () {
+      var o = ecran('<p style="font-size:14px;text-align:center">Compte partagé <b>' + esc(COMPTE_PARTAGE) + '</b> : indique ton prénom pour savoir qui fait quoi.</p><form id="ax-f"><label>Ton prénom</label><input id="ax-pr" autocomplete="given-name" maxlength="40" required><button class="ax-btn" id="ax-b">Continuer</button></form><button class="ax-lien" id="ax-out">Se déconnecter</button><div class="ax-msg" id="ax-m"></div>');
+      o.querySelector("#ax-f").onsubmit = function (ev) {
+        ev.preventDefault(); var v = nettoiePrenom(o.querySelector("#ax-pr").value);
+        if (!v) { var m = o.querySelector("#ax-m"); m.className = "ax-msg ax-err"; m.textContent = "Prénom trop court."; return; }
+        enregistrerPrenom(v); surSession(session, "OK");
+      };
+      o.querySelector("#ax-out").onclick = function () { sb.auth.signOut(); };
+    });
+  }
+  /* journal des actions : qui a modifié quoi (collection « journal_actions ») */
+  var JOURNAL = "journal_actions";
+  function resumeDoc(d) {
+    if (!d || typeof d !== "object") return "";
+    var k = ["nom", "client", "groupe", "titre", "libelle", "contact", "objet", "numero", "email"];
+    for (var i = 0; i < k.length; i++) { var v = d[k[i]]; if (v && typeof v !== "object") return String(v).slice(0, 80); }
+    return "";
+  }
+  function journal(action, col, id, data) {
+    if (!session || col === JOURNAL) return;
+    var det = action === "modification" ? Object.keys(data || {}).slice(0, 8).join(", ") : resumeDoc(data);
+    var jid = "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    sb.from(TABLE).insert({ collection: JOURNAL, id: jid, data: { le: new Date().toISOString(), qui: auteur(), email: session.user.email, prenom: prenomCourant() || null, action: action, col: col, doc: id, detail: det } }).then(function () {}, function () {});
+  }
+  async function afficherJournal() {
+    var o = ecran('<p style="font-weight:700">Historique des actions</p><div id="ax-l" style="font-size:12px;max-height:60vh;overflow:auto">Chargement…</div><button class="ax-lien" id="ax-x">Fermer</button>');
+    o.querySelector(".ax-box").style.maxWidth = "720px"; o.style.overflow = "auto";
+    o.querySelector("#ax-x").onclick = fermerEcran;
+    var r = await sb.from(TABLE).select("id,data").eq("collection", JOURNAL).order("id", { ascending: false }).limit(300);
+    var l = o.querySelector("#ax-l");
+    if (r.error) { l.textContent = r.error.message; return; }
+    if (!r.data.length) { l.textContent = "Aucune action enregistrée pour l'instant."; return; }
+    var NOMS = { crm_actes_resas: "Réservation", crm_actes_membres: "Membre", crm_clients: "Client", crm_factures: "Facture", crm_adherents: "Adhérent", crm_paiements_demandes: "Demande de paiement", chalet_blocages: "Blocage de dates", chalet_config: "Réglages", chalet_envois_auto: "Envoi automatique" };
+    l.innerHTML = '<table class="ax-tab"><tr><td><b>Date</b></td><td><b>Qui</b></td><td><b>Action</b></td><td><b>Détail</b></td></tr>' + r.data.map(function (x) {
+      var d = x.data || {}; var dt = new Date(d.le).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      var quoi = d.action === "connexion" ? "Connexion" : (NOMS[d.col] || String(d.col || "").replace(/^crm_|^chalet_/, "")) + " — " + d.action;
+      return "<tr><td style='white-space:nowrap'>" + esc(dt) + "</td><td><b>" + esc(d.qui || d.email || "") + "</b></td><td>" + esc(quoi) + "</td><td style='color:#6E7469'>" + esc(d.detail || "") + "</td></tr>";
+    }).join("") + "</table>";
+  }
 
   /* ---------------- base de données (API compatible) ---------------- */
   var TABLE = "documents";
@@ -80,9 +133,10 @@
         if (opts && opts.merge) return this.update(data);
         var r = await sb.from(TABLE).upsert({ collection: col, id: id, data: nettoie(data) }, { onConflict: "collection,id" });
         if (r.error) throw erreur(r.error);
+        journal("enregistrement", col, id, data);
       },
-      update: async function (patch) { var r = await sb.rpc("doc_update", { p_col: col, p_id: id, p_patch: nettoie(patch) }); if (r.error) throw erreur(r.error); },
-      delete: async function () { var r = await sb.from(TABLE).delete().eq("collection", col).eq("id", id); if (r.error) throw erreur(r.error); },
+      update: async function (patch) { var r = await sb.rpc("doc_update", { p_col: col, p_id: id, p_patch: nettoie(patch) }); if (r.error) throw erreur(r.error); journal("modification", col, id, patch); },
+      delete: async function () { var r = await sb.from(TABLE).delete().eq("collection", col).eq("id", id); if (r.error) throw erreur(r.error); journal("suppression", col, id, {}); },
       onSnapshot: function (cb, cbErr) {
         var actif = true, self = this;
         self.get().then(function (s) { actif && cb(s); }).catch(function (e) { cbErr && cbErr(e); });
@@ -157,7 +211,7 @@
   var user = {
     isOwner: async function () { return !!profil && profil.role === "admin"; },
     can: async function (perm) { if (!profil) return false; if (perm === "data.write") return profil.role !== "lecture"; return true; },
-    info: async function () { return { email: session && session.user.email, nom: profil && profil.nom, role: profil && profil.role }; }
+    info: async function () { return { email: session && session.user.email, nom: prenomCourant() ? auteur() : (profil && profil.nom), prenom: prenomCourant() || null, role: profil && profil.role }; }
   };
   var downloads = {
     save: async function (o) { var u = URL.createObjectURL(o.data instanceof Blob ? o.data : new Blob([o.data])); var a = document.createElement("a"); a.href = u; a.download = o.filename || "fichier"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); return { ok: true }; }
@@ -202,10 +256,15 @@
   function quandPret(f) { if (document.body) f(); else document.addEventListener("DOMContentLoaded", f); }
   function afficherConnexion() {
     quandPret(function () {
-      var o = ecran('<form id="ax-f"><label>E-mail</label><input id="ax-e" type="email" autocomplete="username" required><label>Mot de passe</label><input id="ax-p" type="password" autocomplete="current-password" required><button class="ax-btn" id="ax-b">Se connecter</button></form><button class="ax-lien" id="ax-oubli">Mot de passe oublié ?</button><div class="ax-msg" id="ax-m"></div>');
+      var o = ecran('<form id="ax-f"><label>E-mail</label><input id="ax-e" type="email" autocomplete="username" required><label>Mot de passe</label><input id="ax-p" type="password" autocomplete="current-password" required><div id="ax-prw" style="display:none"><label>Ton prénom (compte bureau partagé)</label><input id="ax-pr0" autocomplete="given-name" maxlength="40"></div><button class="ax-btn" id="ax-b">Se connecter</button></form><button class="ax-lien" id="ax-oubli">Mot de passe oublié ?</button><div class="ax-msg" id="ax-m"></div>');
       var m = o.querySelector("#ax-m");
+      var ie = o.querySelector("#ax-e"), ipr = o.querySelector("#ax-pr0");
+      function majPr() { var p = ie.value.trim().toLowerCase() === COMPTE_PARTAGE; o.querySelector("#ax-prw").style.display = p ? "" : "none"; ipr.required = p; }
+      ie.addEventListener("input", majPr); ie.addEventListener("change", majPr); setTimeout(majPr, 300);
       o.querySelector("#ax-f").onsubmit = async function (ev) {
-        ev.preventDefault(); var b = o.querySelector("#ax-b"); b.disabled = true; m.className = "ax-msg"; m.textContent = "Connexion…";
+        ev.preventDefault(); var b = o.querySelector("#ax-b");
+        if (ie.value.trim().toLowerCase() === COMPTE_PARTAGE) { if (!nettoiePrenom(ipr.value)) { m.className = "ax-msg ax-err"; m.textContent = "Indique ton prénom."; return; } try { sessionStorage.setItem("actes_prenom_saisi", ipr.value); } catch (e) {} }
+        b.disabled = true; m.className = "ax-msg"; m.textContent = "Connexion…";
         var r = await sb.auth.signInWithPassword({ email: o.querySelector("#ax-e").value.trim(), password: o.querySelector("#ax-p").value });
         b.disabled = false;
         if (r.error) { m.className = "ax-msg ax-err"; m.textContent = /invalid/i.test(r.error.message) ? "E-mail ou mot de passe incorrect." : r.error.message; }
@@ -258,18 +317,19 @@
     style();
     if (document.getElementById("ax-badge")) return;
     var b = document.createElement("button"); b.id = "ax-badge"; b.className = "ax-badge"; b.title = "Mon compte";
-    b.textContent = ((profil && profil.nom) || session.user.email || "?").trim().charAt(0).toUpperCase();
+    b.textContent = (prenomCourant() || (profil && profil.nom) || session.user.email || "?").trim().charAt(0).toUpperCase();
     b.onclick = function () { var m = document.getElementById("ax-menu"); if (m) { m.remove(); return; } menuCompte(); };
     document.body.appendChild(b);
   }
   function menuCompte() {
     var m = document.createElement("div"); m.id = "ax-menu"; m.className = "ax-menu";
-    m.innerHTML = '<div style="padding:4px 8px 10px;border-bottom:1px solid #F0ECE3;margin-bottom:6px"><b>' + esc(profil.nom || session.user.email) + '</b><div style="font-size:12px;color:#6E7469">' + esc(session.user.email) + " · " + esc(ROLES[profil.role] || profil.role) + "</div></div>" +
-      (profil.role === "admin" ? '<button id="ax-acc">👥 Gérer les accès</button>' : "") + '<button id="ax-mdp">🔑 Changer mon mot de passe</button><button id="ax-out">↩ Se déconnecter</button>';
+    m.innerHTML = '<div style="padding:4px 8px 10px;border-bottom:1px solid #F0ECE3;margin-bottom:6px"><b>' + esc(prenomCourant() ? auteur() : (profil.nom || session.user.email)) + '</b><div style="font-size:12px;color:#6E7469">' + esc(session.user.email) + " · " + esc(ROLES[profil.role] || profil.role) + "</div></div>" +
+      (profil.role === "admin" ? '<button id="ax-acc">👥 Gérer les accès</button>' : "") + (profil.role === "admin" || profil.role === "bureau" ? '<button id="ax-hist">🕘 Historique des actions</button>' : "") + '<button id="ax-mdp">🔑 Changer mon mot de passe</button><button id="ax-out">↩ Se déconnecter</button>';
     document.body.appendChild(m);
     m.querySelector("#ax-out").onclick = function () { sb.auth.signOut(); };
     m.querySelector("#ax-mdp").onclick = function () { m.remove(); window.__actesDoitChoisirMdp = true; afficherChoixMdp(); };
     var a = m.querySelector("#ax-acc"); if (a) a.onclick = function () { m.remove(); gererAcces(); };
+    var hi = m.querySelector("#ax-hist"); if (hi) hi.onclick = function () { m.remove(); afficherJournal(); };
   }
   async function gererAcces() {
     var o = ecran('<p style="font-weight:700">Accès à l\'application</p><div id="ax-l" style="font-size:13px">Chargement…</div>' +
