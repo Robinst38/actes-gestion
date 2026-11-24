@@ -383,11 +383,11 @@ function emLayout(o) {
     '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#efe9dd;font-size:1px;">' + emEsc(o.preheader || '') + '</div>' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#efe9dd;"><tr><td align="center" style="padding:24px 12px;">' +
     '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;">' +
-    '<tr><td style="padding:0;line-height:0;font-size:0;">' + hero + '</td></tr>' +
+    (o.compact ? '' : '<tr><td style="padding:0;line-height:0;font-size:0;">' + hero + '</td></tr>' +
     '<tr><td align="center" bgcolor="#1f3d2b" style="background:#1f3d2b;padding:20px 24px 18px;">' +
     '<div style="font:700 11px ' + EM_SANS + ';letter-spacing:3px;text-transform:uppercase;color:#b98d46;">Association A.C.T.E.S</div>' +
     '<div style="font:600 30px/1.2 ' + EM_SERIF + ';color:#faf6ef;margin:4px 0 2px;">Chalet Bellevue</div>' +
-    '<div style="font:400 11px ' + EM_SANS + ';letter-spacing:3px;text-transform:uppercase;color:#cfc7b4;">Luchon \u00b7 Pyr\u00e9n\u00e9es</div></td></tr>' +
+    '<div style="font:400 11px ' + EM_SANS + ';letter-spacing:3px;text-transform:uppercase;color:#cfc7b4;">Luchon \u00b7 Pyr\u00e9n\u00e9es</div></td></tr>') +
     '<tr><td style="padding:32px 32px 8px;font:400 15px/1.6 ' + EM_SANS + ';color:#2b2b2b;">' +
     '<h1 style="font:600 26px/1.25 ' + EM_SERIF + ';color:#1f3d2b;margin:0 0 14px;">' + o.title + '</h1>' + o.body + '</td></tr>' +
     '<tr><td align="center" bgcolor="#faf6ef" style="background:#faf6ef;border-top:1px solid #e6dfd1;padding:22px 24px;font:400 12px/1.7 ' + EM_SANS + ';color:#6f6a60;">' +
@@ -470,7 +470,7 @@ function emailAdminNewHtml(d) {
     ]) + '<div style="height:20px;"></div>' +
     (d.message ? emLabel('Message du client') + '<p style="margin:0 0 22px;padding:12px 16px;background:#faf6ef;border-radius:10px;font:italic 14px/1.5 ' + EM_SERIF + ';">' + emEsc(d.message).replace(/\n/g, '<br>') + '</p>' : '') +
     emButton(EM_SITE + '/espace-admin', 'Ouvrir l\'espace admin') + '<div style="height:16px;"></div>';
-  return emLayout({ title: 'Nouvelle demande de r\u00e9servation', preheader: d.name + ' \u00b7 ' + emDate(d.checkIn) + ' au ' + emDate(d.checkOut), body: body });
+  return emLayout({ compact: true, title: 'Nouvelle demande de r\u00e9servation', preheader: d.name + ' \u00b7 ' + emDate(d.checkIn) + ' au ' + emDate(d.checkOut), body: body });
 }
 
 function emailFeedbackHtml(d) {
@@ -612,7 +612,7 @@ function emailContactAdminHtml(d) {
     ]) + '<div style="height:20px;"></div>' +
     emLabel('Message') +
     '<p style="margin:0 0 22px;padding:14px 16px;background:#faf6ef;border-radius:10px;font:400 15px/1.6 ' + EM_SANS + ';">' + emEsc(d.message).replace(/\n/g, '<br>') + '</p>';
-  return emLayout({ title: 'Nouveau message du site', preheader: d.name + ' : ' + d.message.slice(0, 80), body: body });
+  return emLayout({ compact: true, title: 'Nouveau message du site', preheader: d.name + ' : ' + d.message.slice(0, 80), body: body });
 }
 
 function emailContactAckHtml(d) {
