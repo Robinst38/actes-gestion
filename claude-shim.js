@@ -77,7 +77,7 @@
     if (!session || col === JOURNAL) return;
     var det = action === "modification" ? Object.keys(data || {}).slice(0, 8).join(", ") : resumeDoc(data);
     var jid = "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    sb.from(TABLE).insert({ collection: JOURNAL, id: jid, data: { le: new Date().toISOString(), qui: auteur(), email: session.user.email, prenom: prenomCourant() || null, action: action, col: col, doc: id, detail: det } }).then(function () {}, function () {});
+    sb.from(TABLE).insert({ collection: JOURNAL, id: jid, data: { onglet: ONGLET, le: new Date().toISOString(), qui: auteur(), email: session.user.email, prenom: prenomCourant() || null, action: action, col: col, doc: id, detail: det } }).then(function () {}, function () {});
   }
   async function afficherJournal() {
     var o = ecran('<p style="font-weight:700">Historique des actions</p><div id="ax-l" style="font-size:12px;max-height:60vh;overflow:auto">Chargement…</div><button class="ax-lien" id="ax-x">Fermer</button>');
@@ -95,6 +95,58 @@
     }).join("") + "</table>";
   }
 
+  /* ---------------- travail à plusieurs : pas d'écrasement (24/11/2026) ----------------
+     Chaque onglet retient la version de chaque fiche qu'il a lue. Au moment d'enregistrer :
+     - champs modifiés ailleurs mais pas ici → on garde la version de l'autre (fusion automatique) ;
+     - même champ modifié des deux côtés → enregistrement refusé + message, rien n'est écrasé. */
+  var ONGLET = "o" + Math.random().toString(36).slice(2, 10);
+  var lu = new Map(), mesEcritures = new Map();
+  function canon(v) {
+    if (v === undefined) return "u";
+    if (v === null || typeof v !== "object") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+    return "{" + Object.keys(v).filter(function (k) { return v[k] !== undefined; }).sort().map(function (k) { return JSON.stringify(k) + ":" + canon(v[k]); }).join(",") + "}";
+  }
+  function egal(a, b) { return canon(a) === canon(b); }
+  var LIB_CHAMPS = { statut: "statut", paiements: "paiements", acompte: "acompte", arrivee: "date d'arrivée", depart: "date de départ", montant: "montant", notes: "notes", note: "note" };
+  async function dernierAuteur(col, id) {
+    try {
+      var r = await sb.from(TABLE).select("data").eq("collection", JOURNAL).eq("data->>col", col).eq("data->>doc", id).order("id", { ascending: false }).limit(5);
+      var x = (r.data || []).map(function (y) { return y.data; }).filter(function (d) { return d && d.onglet !== ONGLET; })[0];
+      return x ? (x.qui || x.email) + " (" + new Date(x.le).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + ")" : "";
+    } catch (e) { return ""; }
+  }
+  async function conflit(col, id, champs) {
+    var qui = await dernierAuteur(col, id);
+    var noms = champs.map(function (k) { return LIB_CHAMPS[k] || k; }).join(", ");
+    var msg = (qui ? qui : "Quelqu'un") + " a modifié cette fiche (" + noms + ") pendant que tu travaillais dessus. Pour ne pas écraser son travail, ta modification n'a pas été enregistrée : clique sur « Actualiser », puis refais-la.";
+    bandeauActualiser(msg, true);
+    var x = new Error(msg); x.code = "conflit"; return x;
+  }
+  /* renvoie les données à écrire (fusionnées) ou lève une erreur de conflit */
+  async function preparerEcriture(col, id, nouv, patch) {
+    var k = col + "/" + id;
+    if (!lu.has(k)) return nouv;
+    var r = await sb.from(TABLE).select("data").eq("collection", col).eq("id", id).maybeSingle();
+    if (r.error || !r.data) return nouv;
+    var cur = r.data.data || {}, old = lu.get(k) || {}, out = {}, bad = [];
+    Object.keys(nouv).forEach(function (c) { out[c] = nouv[c]; });
+    var cles = {};
+    [nouv, cur, old].forEach(function (o) { Object.keys(o || {}).forEach(function (c) { cles[c] = 1; }); });
+    Object.keys(cles).forEach(function (c) {
+      if (patch && !(c in nouv)) return;
+      var a = old[c], v = cur[c], n = nouv[c];
+      if (egal(a, v) || egal(n, v)) return;           // personne d'autre n'a touché ce champ, ou même valeur
+      if (egal(n, a)) {                                // changé ailleurs, pas ici → on garde la version de l'autre
+        if (patch) delete out[c]; else if (v === undefined) delete out[c]; else out[c] = v;
+        return;
+      }
+      bad.push(c);                                     // changé des deux côtés → conflit
+    });
+    if (bad.length) throw await conflit(col, id, bad);
+    return out;
+  }
+
   /* ---------------- base de données (API compatible) ---------------- */
   var TABLE = "documents";
   function decoupe(path) { var i = path.indexOf("/"); return [path.slice(0, i), path.slice(i + 1)]; }
@@ -106,6 +158,7 @@
     for (;;) {
       var r = await sb.from(TABLE).select("id,data").eq("collection", col).order("id").range(from, from + pas - 1);
       if (r.error) throw erreur(r.error);
+      (r.data || []).forEach(function (x) { lu.set(col + "/" + x.id, x.data); });
       out = out.concat(r.data || []);
       if (!r.data || r.data.length < pas) break;
       from += pas;
@@ -128,15 +181,25 @@
   function refDoc(col, id) {
     return {
       id: id, path: col + "/" + id,
-      get: async function () { var r = await sb.from(TABLE).select("data").eq("collection", col).eq("id", id).maybeSingle(); if (r.error) throw erreur(r.error); return snapDoc(id, r.data ? r.data.data : null); },
+      get: async function () { var r = await sb.from(TABLE).select("data").eq("collection", col).eq("id", id).maybeSingle(); if (r.error) throw erreur(r.error); if (r.data) lu.set(col + "/" + id, r.data.data); else lu.delete(col + "/" + id); return snapDoc(id, r.data ? r.data.data : null); },
       set: async function (data, opts) {
         if (opts && opts.merge) return this.update(data);
-        var r = await sb.from(TABLE).upsert({ collection: col, id: id, data: nettoie(data) }, { onConflict: "collection,id" });
+        var d = await preparerEcriture(col, id, nettoie(data), false);
+        mesEcritures.set(col + "/" + id, Date.now());
+        var r = await sb.from(TABLE).upsert({ collection: col, id: id, data: d }, { onConflict: "collection,id" });
         if (r.error) throw erreur(r.error);
-        journal("enregistrement", col, id, data);
+        lu.set(col + "/" + id, d);
+        journal("enregistrement", col, id, d);
       },
-      update: async function (patch) { var r = await sb.rpc("doc_update", { p_col: col, p_id: id, p_patch: nettoie(patch) }); if (r.error) throw erreur(r.error); journal("modification", col, id, patch); },
-      delete: async function () { var r = await sb.from(TABLE).delete().eq("collection", col).eq("id", id); if (r.error) throw erreur(r.error); journal("suppression", col, id, {}); },
+      update: async function (patch) {
+        var p = await preparerEcriture(col, id, nettoie(patch), true);
+        if (!Object.keys(p).length) return;
+        mesEcritures.set(col + "/" + id, Date.now());
+        var r = await sb.rpc("doc_update", { p_col: col, p_id: id, p_patch: p }); if (r.error) throw erreur(r.error);
+        var k = col + "/" + id; if (lu.has(k)) { var n = Object.assign({}, lu.get(k) || {}, p); lu.set(k, n); }
+        journal("modification", col, id, p);
+      },
+      delete: async function () { mesEcritures.set(col + "/" + id, Date.now()); var r = await sb.from(TABLE).delete().eq("collection", col).eq("id", id); if (r.error) throw erreur(r.error); lu.delete(col + "/" + id); journal("suppression", col, id, {}); },
       onSnapshot: function (cb, cbErr) {
         var actif = true, self = this;
         self.get().then(function (s) { actif && cb(s); }).catch(function (e) { cbErr && cbErr(e); });
@@ -296,21 +359,34 @@
   var ecoute = false, tAutres = null;
   function ecouterAutres() {
     if (ecoute) return; ecoute = true;
+    var NOMS_C = { crm_actes_resas: "une réservation", crm_actes_membres: "un membre", crm_clients: "un client", crm_factures: "une facture", crm_adherents: "un adhérent", crm_paiements_demandes: "une demande de paiement" };
+    var nomme = 0;
     sb.channel("autres").on("postgres_changes", { event: "*", schema: "public", table: TABLE }, function (p) {
       var row = p.new && p.new.collection ? p.new : p.old || {};
+      // modifications faites depuis un autre appareil / onglet, avec le prénom (journal)
+      if (row.collection === JOURNAL) {
+        var d = p.new && p.new.data; if (!d || d.onglet === ONGLET || d.action === "connexion") return;
+        if (!/^(crm_|conciergerie|chalet_blocages)/.test(d.col || "")) return;
+        nomme = Date.now(); clearTimeout(tAutres);
+        bandeauActualiser((d.qui || d.email || "Un autre membre") + " vient de modifier " + (NOMS_C[d.col] || "des données") + (d.detail && d.action !== "modification" ? " (" + d.detail + ")" : "") + ".");
+        return;
+      }
       if (!/^(crm_|conciergerie)/.test(row.collection || "")) return;
-      if (p.new && p.new.updated_by && session && p.new.updated_by === session.user.id) return;
-      if (p.eventType === "DELETE" && !p.new) { /* suppression : auteur inconnu, on prévient quand même */ }
-      clearTimeout(tAutres); tAutres = setTimeout(bandeauActualiser, 1500);
+      var t = mesEcritures.get(row.collection + "/" + row.id);
+      if (t && Date.now() - t < 15000) return;          // c'est moi (cet onglet)
+      clearTimeout(tAutres); tAutres = setTimeout(function () { if (Date.now() - nomme > 5000) bandeauActualiser(); }, 2500);
     }).subscribe();
   }
-  function bandeauActualiser() {
-    if (document.getElementById("ax-maj")) return;
-    var d = document.createElement("div"); d.id = "ax-maj";
-    d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:2147482500;background:#1F3D2B;color:#fff;border-radius:12px;padding:10px 14px;font:14px Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center";
-    d.innerHTML = "<span>Un autre membre a modifié des données.</span><button style='background:#C0693E;color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer'>Actualiser</button><button style='background:none;border:0;color:#fff;cursor:pointer'>✕</button>";
-    var b = d.querySelectorAll("button"); b[0].onclick = function () { location.reload(); }; b[1].onclick = function () { d.remove(); };
-    document.body.appendChild(d);
+  function bandeauActualiser(texte, alerte) {
+    var d = document.getElementById("ax-maj");
+    if (!d) {
+      d = document.createElement("div"); d.id = "ax-maj";
+      d.innerHTML = "<span></span><button style='background:#C0693E;color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;white-space:nowrap'>Actualiser</button><button style='background:none;border:0;color:#fff;cursor:pointer'>✕</button>";
+      var b = d.querySelectorAll("button"); b[0].onclick = function () { location.reload(); }; b[1].onclick = function () { d.remove(); };
+      document.body.appendChild(d);
+    }
+    d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:2147482500;max-width:min(92vw,620px);background:" + (alerte ? "#9A3412" : "#1F3D2B") + ";color:#fff;border-radius:12px;padding:10px 14px;font:14px Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center";
+    d.querySelector("span").textContent = texte || "Un autre membre a modifié des données.";
   }
   var ROLES = { admin: "Administrateur", bureau: "Bureau (toute l'appli)", menage: "Ménage / exploitation", lecture: "Lecture seule" };
   function badgeCompte() {
