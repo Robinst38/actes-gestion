@@ -794,7 +794,8 @@
   async function init() {
     const me = await requireAuth('admin');
     if (!me) return;
-    $id('admin-name').textContent = me.fullName;
+    $id('admin-name').textContent = me.prenom ? (me.prenom + ' (' + me.fullName + ')') : me.fullName;
+    if (me.compteBureau && !me.prenom) { try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch (e) {} location.href = 'login.html'; return; }
     currentAdminEmail = me.email;
     currentIsBureau = !!me.bureau;
     if (currentIsBureau) applyBureauMode();
@@ -807,6 +808,60 @@
     loadProjects();
     loadReviews();
     loadFeedback();
+    loadJournal();
+    const ht = root.querySelector('.dash-tab[data-tab="historique"]');
+    if (ht) ht.addEventListener('click', loadJournal);
+  }
+
+  // ---- Historique (journal des actions) ----
+  const LIBELLES_JOURNAL = [
+    [/^\/api\/admin\/connexion$/, 'Connexion'],
+    [/^\/api\/admin\/availability$/, 'Disponibilités (blocage / déblocage de dates)'],
+    [/^\/api\/admin\/reservations\/[^/]+\/status$/, 'Statut d\'une réservation'],
+    [/^\/api\/admin\/reservations/, 'Réservation'],
+    [/^\/api\/admin\/members/, 'Membres'],
+    [/^\/api\/admin\/documents/, 'Documents'],
+    [/^\/api\/admin\/content/, 'Contenu du site'],
+    [/^\/api\/admin\/rates/, 'Tarifs'],
+    [/^\/api\/admin\/invoices/, 'Factures'],
+    [/^\/api\/admin\/projects/, 'Projets'],
+    [/^\/api\/admin\/reviews/, 'Avis'],
+    [/^\/api\/admin\/feedback/, 'Retours d\'expérience'],
+    [/^\/api\/admin\/lastminute/, 'Envoi dernière minute'],
+    [/^\/api\/admin\/sync-calendars$/, 'Synchronisation des calendriers'],
+  ];
+  function libelleJournal(chemin, methode) {
+    let l = chemin.replace('/api/admin/', '');
+    for (const [re, t] of LIBELLES_JOURNAL) { if (re.test(chemin)) { l = t; break; } }
+    if (methode === 'DELETE') l += ' — suppression';
+    return l;
+  }
+  function detailJournal(d) {
+    if (!d) return '';
+    try {
+      const o = JSON.parse(d);
+      if (Array.isArray(o.dates)) {
+        const ds = o.dates.slice().sort();
+        const per = ds.length > 1 ? ds[0] + ' → ' + ds[ds.length - 1] + ' (' + ds.length + ' j)' : ds[0];
+        return (o.action === 'block' ? 'Bloque ' : o.action === 'unblock' ? 'Débloque ' : '') + per + (o.reason ? ' — « ' + o.reason + ' »' : '');
+      }
+      return Object.keys(o).slice(0, 6).map((k) => k + ' : ' + String(typeof o[k] === 'object' ? JSON.stringify(o[k]) : o[k]).slice(0, 60)).join(' · ');
+    } catch (e) { return String(d).slice(0, 120); }
+  }
+  async function loadJournal() {
+    const wrap = $id('adm-journal-wrap');
+    if (!wrap) return;
+    try {
+      const r = await apiFetch('/api/admin/journal');
+      const rows = r.journal || [];
+      if (!rows.length) { wrap.innerHTML = '<p class="empty-state">Aucune action enregistrée pour l\'instant.</p>'; return; }
+      const fmt = (iso) => new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      wrap.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.86rem;"><thead><tr style="text-align:left; border-bottom:1px solid var(--line, #ddd);"><th style="padding:6px 8px;">Date</th><th style="padding:6px 8px;">Qui</th><th style="padding:6px 8px;">Action</th><th style="padding:6px 8px;">Détail</th></tr></thead><tbody>' +
+        rows.map((x) => '<tr style="border-bottom:1px solid var(--line, #eee);"><td style="padding:6px 8px; white-space:nowrap;">' + escHtml(fmt(x.le)) + '</td><td style="padding:6px 8px;"><strong>' + escHtml(x.prenom || '—') + '</strong><br><span style="color:var(--ink-soft); font-size:0.78rem;">' + escHtml(x.email || '') + '</span></td><td style="padding:6px 8px;">' + escHtml(libelleJournal(x.chemin || '', x.methode)) + '</td><td style="padding:6px 8px; color:var(--ink-soft);">' + escHtml(detailJournal(x.detail)) + '</td></tr>').join('') +
+        '</tbody></table></div>';
+    } catch (e) {
+      wrap.innerHTML = '<p class="empty-state">' + escHtml(e.message || 'Erreur') + '</p>';
+    }
   }
   // Fix 19/10/2026 : même correction que assets/espace-abonne.js — appel
   // direct de init() (page à part sur le vrai site, hash-gating de l'ancien

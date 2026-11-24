@@ -81,6 +81,11 @@
 <label for="login-password">Mot de passe</label>
 <input autocomplete="current-password" id="login-password" required="" type="password"/>
 </div>
+<div class="auth-field" id="login-prenom-field" style="display:none;">
+<label for="login-prenom">Votre prénom</label>
+<input autocomplete="given-name" id="login-prenom" maxlength="40" type="text"/>
+<small style="display:block; margin-top:4px; font-size:0.8rem; color:var(--ink-soft);">Compte partagé du bureau : votre prénom permet de savoir qui fait quoi.</small>
+</div>
 <button class="btn btn-primary auth-submit" type="submit">Se connecter</button>
 </form>
 <p style="margin-top:18px; font-size:0.85rem; color:var(--ink-soft); text-align:center;">
@@ -142,7 +147,7 @@
 <script src="site.js?v=20261021k"></script>
 <script src="api-config.js?v=20261024b"></script>
 <script src="auth.js?v=20261021i"></script>
-<script src="login.js?v=20261021i"></script><script src="forgot.js?v=20261021t"></script>
+<script src="login.js?v=20261124p"></script><script src="forgot.js?v=20261021t"></script>
 <script defer src="consent.js?v=20261021i"></script>
 </body>
 </html>

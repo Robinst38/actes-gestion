@@ -84,6 +84,7 @@
 <button class="dash-tab" data-tab="experience" type="button">Retour d'expérience</button>
 <button class="dash-tab" data-tab="contenu" type="button">Contenu du site</button>
 <button class="dash-tab" data-tab="plateformes" type="button">Plateformes</button>
+<button class="dash-tab" data-tab="historique" type="button">Historique</button>
 <button class="dash-tab" data-tab="compte" type="button">Mon compte</button>
 </div>
 </div>
@@ -245,6 +246,13 @@
 <span id="pf-save-msg" style="margin-left:10px; font-size:0.86rem;"></span>
 </div>
 </section>
+<section class="dash-panel" id="panel-historique">
+<div class="dash-card">
+<h2>Historique des actions</h2>
+<p style="color:var(--ink-soft); font-size:0.88rem; margin-bottom:16px;">Connexions et modifications faites dans l'espace administration, avec le prénom saisi à la connexion (compte bureau partagé). 300 dernières actions.</p>
+<div id="adm-journal-wrap"><p class="empty-state">Chargement…</p></div>
+</div>
+</section>
 <section class="dash-panel" id="panel-compte">
 <div class="dash-card">
 <h2>Changer de mot de passe</h2>
@@ -317,7 +325,7 @@
 <script src="site.js?v=20261021k"></script>
 <script src="api-config.js?v=20261024b"></script>
 <script src="auth.js?v=20261021i"></script>
-<script src="espace-admin.js?v=20261119b"></script>
+<script src="espace-admin.js?v=20261124p"></script>
 <script src="admin-lastminute.js?v=20261021i"></script>
 <script src="admin-plateformes.js?v=20261123a"></script>
 <script defer src="consent.js?v=20261021i"></script>

@@ -28,6 +28,20 @@
   form.reset();
   redirectIfLoggedIn();
 
+  // Compte partagé bureau@ : prénom obligatoire (journal « qui a fait quoi »).
+  const COMPTE_PARTAGE = 'bureau@chalet-bellevue.fr';
+  const emailInput = document.getElementById('login-email');
+  const prenomField = document.getElementById('login-prenom-field');
+  const prenomInput = document.getElementById('login-prenom');
+  function majPrenom() {
+    const partage = emailInput.value.trim().toLowerCase() === COMPTE_PARTAGE;
+    prenomField.style.display = partage ? '' : 'none';
+    prenomInput.required = partage;
+  }
+  emailInput.addEventListener('input', majPrenom);
+  emailInput.addEventListener('change', majPrenom);
+  setTimeout(majPrenom, 300); // remplissage automatique du navigateur
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorBox.classList.remove('is-visible');
@@ -39,7 +53,7 @@
     try {
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, prenom: prenomInput.value.trim() }),
       });
       location.href = res.role === 'admin' ? 'espace-admin.html' : 'espace-abonne.html';
     } catch (err) {
