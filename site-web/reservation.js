@@ -441,13 +441,13 @@ async function submitRequest(method) {
       `<p><strong>La suite :</strong></p>` +
       `<ol><li>Serge valide votre demande personnellement sous 48 h.</li><li>${step2}</li><li>Le solde est à régler un mois avant votre arrivée.</li></ol>` +
       `<p>La taxe de séjour se règle sur place.</p>` +
-      (emailSent ? `<p>Un e-mail récapitulatif vient de vous être envoyé à <strong>${payload.email}</strong> (pensez à vérifier vos courriers indésirables).</p>` : '');
+      (emailSent ? `<p>Vous allez recevoir dans quelques minutes, à <strong>${payload.email}</strong>, un e-mail avec le lien et le code d’accès à votre espace séjour (pensez à vérifier vos courriers indésirables).</p>` : '');
   } else {
     console.log('Demande de réservation (non envoyée) :', payload, backendError ? `Erreur : ${backendError}` : '');
     if (iconEl) { iconEl.textContent = '✕'; iconEl.classList.add('is-error'); }
     if (titleEl) titleEl.textContent = "Votre demande n'a pas pu être enregistrée automatiquement";
     document.getElementById('bk-confirm-text').innerHTML =
-      `<p>Pas de panique : écrivez-nous à <a href="mailto:contact@chalet-bellevue.fr">contact@chalet-bellevue.fr</a> ou appelez le <a href="tel:+33545692500">05 45 69 25 00</a> en indiquant vos dates (${stay}) et le nombre de personnes.</p>` +
+      `<p>Pas de panique : écrivez-nous à <a href="mailto:contact@chalet-bellevue.fr">contact@chalet-bellevue.fr</a> en indiquant vos dates (${stay}) et le nombre de personnes.</p>` +
       ``;
   }
 }

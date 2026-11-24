@@ -26,7 +26,7 @@
       })
       .catch(function (err) {
         btn.disabled = false; btn.textContent = 'Envoyer le message';
-        say(err.message + ' Vous pouvez aussi nous écrire à contact@chalet-bellevue.fr ou appeler le 05 45 69 25 00.', false);
+        say(err.message + ' Vous pouvez aussi nous écrire à contact@chalet-bellevue.fr.', false);
       });
   });
 })();
