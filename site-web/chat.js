@@ -1,5 +1,5 @@
 /* Assistant de chat du Chalet Bellevue (gratuit, Cloudflare Workers AI).
-   Répond uniquement à partir des infos du site ; sinon renvoie vers Serge.
+   Répond uniquement à partir des infos du site ; sinon renvoie vers le bureau.
    Langues : fr (défaut), en, es — selon <html lang>. */
 (function () {
   if (document.getElementById('cb-chat')) return;

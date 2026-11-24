@@ -434,12 +434,12 @@ async function submitRequest(method) {
     if (iconEl) { iconEl.textContent = '✓'; iconEl.classList.remove('is-error'); }
     if (titleEl) titleEl.textContent = 'Merci, votre demande est bien envoyée !';
     const step2 = method === 'online'
-      ? `Serge vous recontacte pour organiser le règlement de l'acompte.`
-      : `Il vous recontacte pour organiser le règlement de l'acompte et de l'adhésion annuelle.`;
+      ? `Le bureau vous recontacte pour organiser le règlement de l'acompte.`
+      : `Le bureau vous recontacte pour organiser le règlement de l'acompte et de l'adhésion annuelle.`;
     document.getElementById('bk-confirm-text').innerHTML =
       `<p>Séjour du ${stay}, transmis à l'association.</p>` +
       `<p><strong>La suite :</strong></p>` +
-      `<ol><li>Serge valide votre demande personnellement sous 48 h.</li><li>${step2}</li><li>Le solde est à régler un mois avant votre arrivée.</li></ol>` +
+      `<ol><li>Le bureau de l'association valide votre demande sous 48 h.</li><li>${step2}</li><li>Le solde est à régler un mois avant votre arrivée.</li></ol>` +
       `<p>La taxe de séjour se règle sur place.</p>` +
       (emailSent ? `<p>Vous allez recevoir dans quelques minutes, à <strong>${payload.email}</strong>, un e-mail avec le lien et le code d’accès à votre espace séjour (pensez à vérifier vos courriers indésirables).</p>` : '');
   } else {
