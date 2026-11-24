@@ -1911,7 +1911,7 @@ function sectionDocuments(d, base, codeEnvoye) {
       const champs = [].concat(...reste.map((x) => x.champs || []));
       h += `<form method="post" action="${base}/signer-tout" class="dform">
 <label for="sg-code">Code re\xE7u par e-mail${sig.email ? " (" + esc(sig.email) + ")" : ""}</label><input type="text" id="sg-code" name="code" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="max-width:160px;letter-spacing:4px;font-size:20px">
-${champs.map((c) => `<label for="sg-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="sg-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
+${champs.some((c) => /assur/i.test(c.lib || "")) ? AIDE_ASSUR : ""}${champs.map((c) => `<label for="sg-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="sg-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
 <label for="sg-nom">Signature : tapez votre pr\xE9nom et votre nom</label><input type="text" id="sg-nom" name="nom" required minlength="3" maxlength="120" autocomplete="name">
 <label class="coche"><input type="checkbox" name="accepte" required> J'ai lu ${reste.map((x) => "\xAB\xA0" + esc(x.titre) + "\xA0\xBB").join(", ").replace(/, ([^,]*)$/, " et $1")}, et je ${reste.length > 1 ? "les " : "l'"}accepte au nom de mon groupe. Je reconnais que cette signature \xE9lectronique m'engage comme une signature manuscrite.</label>
 <div class="btns"><button class="btn btn-v" type="submit">Signer ${reste.length > 1 ? "les " + reste.length + " documents" : "le document"}</button></div>
@@ -2127,7 +2127,23 @@ async function routeEquipe(request, env, url) {
   else if (p.get("err")) msg = `<div class="msg m-err">${esc(p.get("err"))}</div>`;
   return pageDepot(r2.data, k, f, msg);
 }
+
+var AIDE_ASSUR = '<div style="background:#f3efe6;border-left:4px solid #b98d46;border-radius:8px;padding:10px 14px;margin:14px 0 4px;font-size:14px;line-height:1.5"><b>Quelle assurance indiquer ?</b><br>Celle de votre <b>logement principal (assurance multirisque habitation)</b>. La plupart de ces contrats incluent une garantie <b>« villégiature »</b> qui couvre les dégâts que vous pourriez causer dans un logement loué pour les vacances (responsabilité civile locative). En cas de doute, demandez à votre assureur une attestation « villégiature » pour les dates du séjour.<br><b>Assureur</b> : le nom de votre compagnie (ex. MAIF, AXA, Groupama…).<br><b>N° de contrat</b> : il figure sur votre attestation ou votre avis d’échéance d’assurance habitation.</div>';
 async function routeSejour(request, env, url) {
+  if (url.pathname === "/sejour/paiement-recu") {
+    const idDp = url.searchParams.get("d") || "", rateDp = url.searchParams.get("a") || url.searchParams.get("e");
+    let rDp = null;
+    if (/^dp[a-z0-9]{4,30}$/.test(idDp)) {
+      try { const x = await fetch(env.LOGICIEL_URL.replace(/\/site\/?$/, "/helloasso"), { method: "POST", signal: AbortSignal.timeout(15e3), headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "demande-verifier", id: idDp }) }); if (x.ok) rDp = await x.json(); } catch (e) { console.error("paiement-recu", String(e)); }
+    }
+    const mtDp = rDp ? Number(rDp.montant || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) : "";
+    const corpsDp = rDp && rDp.statut === "paye"
+      ? `<p class="eyebrow">Paiement en ligne</p><h1>Merci, paiement reçu</h1><div class="msg m-ok">Votre paiement de ${esc(mtDp)} (${esc(rDp.libelle || "")}) est bien enregistré par l'association. HelloAsso vous envoie un justificatif par e-mail.</div><p>Vous pouvez fermer cette page.</p>`
+      : rateDp
+      ? `<p class="eyebrow">Paiement en ligne</p><h1>Paiement non effectué</h1><div class="msg m-err">Le paiement a été annulé ou n'a pas abouti : rien n'a été prélevé.</div><p>Vous pouvez réessayer avec le même lien, ou contacter l'association.</p>`
+      : `<p class="eyebrow">Paiement en ligne</p><h1>Paiement en cours de vérification</h1><div class="msg">Nous n'avons pas encore la confirmation de HelloAsso. Si votre paiement est passé, il sera enregistré automatiquement dans quelques minutes.</div>`;
+    return page("Paiement en ligne", corpsDp);
+  }
   if (/^\/sejour\/?$/.test(url.pathname) || url.pathname === "/sejour/connexion") {
     if (request.method === "POST" && url.pathname === "/sejour/connexion") {
       if (!memeOrigine(request)) return new Response("Origine refus\xE9e", { status: 403 });
@@ -2761,7 +2777,7 @@ async function synchroniser(env) {
       retours.push({ siteId: String(l.id), status: l.status });
     }
     if ((voulu || l.status) === "cancelled" || !(s.paye > 0)) continue;
-    const depOk = s.paye + 0.01 >= Number(l.price_deposit || 0);
+    const depOk = s.paye + 0.01 >= Number((Number(s.acompte) > 0 ? s.acompte : l.price_deposit) || 0);
     const balOk = s.paye + 0.01 >= Number(l.price_grand_total || 0);
     const depPaye = factures.get(l.id + ":reservation_deposit") === "paid";
     const balPaye = factures.get(l.id + ":reservation_balance") === "paid";
