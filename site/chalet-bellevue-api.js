@@ -322,7 +322,7 @@ async function createInvoice(env, { type, direction, category, label, amount, st
    ========================================================================= */
 
 const EM_SITE = 'https://www.chalet-bellevue.fr';
-const EM_HERO = EM_SITE + '/hero-chalet-neige.jpg';
+const EM_HERO = 'https://chaletbellevue-4pi.pages.dev/hero-chalet-neige.jpg'; // image servie directement par Pages : s'affiche même quand le site est en maintenance
 const EM_CAUTION = 500;
 const EM_MONTHS = ['janvier', 'f\u00e9vrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'ao\u00fbt', 'septembre', 'octobre', 'novembre', 'd\u00e9cembre'];
 const EM_DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -420,18 +420,18 @@ function emailReservationHtml(d) {
       '<div style="font-size:12px;color:#6f6a60;margin:8px 0 12px;">\u00c0 changer d\u00e8s votre premi\u00e8re connexion.</div>'
     : '<p style="margin:0 0 12px;">Retrouvez et suivez votre r\u00e9servation depuis votre espace adh\u00e9rent (connectez-vous avec votre compte habituel).</p>';
   const body =
-    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>merci pour votre demande ! Elle a bien \u00e9t\u00e9 re\u00e7ue et sera valid\u00e9e sous 48 h. Serge vous recontactera ensuite pour organiser le r\u00e8glement.</p>' +
+    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>merci pour votre demande ! Elle a bien \u00e9t\u00e9 re\u00e7ue et sera valid\u00e9e sous 48 h. D\u00e8s sa validation, vous recevrez un e-mail de confirmation avec les montants et le lien pour r\u00e9gler en ligne.</p>' +
     '<p style="margin:0 0 20px;"><span style="display:inline-block;background:#f3e6c9;color:#7a5a17;font:700 12px ' + EM_SANS + ';letter-spacing:1px;text-transform:uppercase;border-radius:999px;padding:5px 12px;">En attente de validation</span></p>' +
     emStay(d.checkIn, d.checkOut) +
     '<p style="margin:-8px 0 24px;font:400 14px ' + EM_SANS + ';color:#6f6a60;text-align:center;">' + emPlural(p.nights, 'nuit') + ' \u00b7 ' + guests + ' \u00b7 m\u00e9nage de fin de s\u00e9jour : ' + (d.wantsCleaning ? 'oui' : 'non') + '</p>' +
     
     emLabel('Ce que vous aurez \u00e0 r\u00e9gler') +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 6px;">' +
-    step('#c0693e', '\u00e0 la validation de votre demande', 'Acompte + adh\u00e9sion', '', 'montant communiqu\u00e9 par Serge') +
-    step('#b98d46', balanceWhen, 'Solde de la location', '', 'montant communiqu\u00e9 par Serge') +
+    step('#c0693e', '\u00e0 la validation de votre demande', 'Acompte + adh\u00e9sion', '', 'montant indiqu\u00e9 \u00e0 la validation') +
+    step('#b98d46', balanceWhen, 'Solde de la location', '', 'montant indiqu\u00e9 \u00e0 la validation') +
     '</table>' +
-    '<p style="margin:0 0 24px;font:400 13px ' + EM_SANS + ';color:#6f6a60;">R\u00e8glement par ch\u00e8que, en esp\u00e8ces ou par virement.</p>' +
-    emLabel('Votre espace adh\u00e9rent') + emBox(account + emButton(EM_SITE + '/login', 'Acc\u00e9der \u00e0 mon espace')) +
+    '<p style="margin:0 0 24px;font:400 13px ' + EM_SANS + ';color:#6f6a60;">R\u00e8glement en ligne par carte bancaire (lien dans l\'e-mail de confirmation), par ch\u00e8que, en esp\u00e8ces ou par virement.</p>' +
+    emLabel('Votre espace s\u00e9jour') + emBox('<p style="margin:0 0 8px;">Vous allez recevoir un second e-mail avec le <strong>lien et le code d\u2019acc\u00e8s \u00e0 votre espace s\u00e9jour</strong> : vous y suivez votre demande, signez vos documents et r\u00e9glez en ligne.</p>' + '<p style="margin:0;font-size:13px;color:#6f6a60;">Votre espace adh\u00e9rent A.C.T.E.S sera ouvert une fois la r\u00e9servation valid\u00e9e et l\u2019acompte r\u00e9gl\u00e9 : vos identifiants vous seront alors envoy\u00e9s par e-mail.</p>') +
     (d.message ? emLabel('Votre message') + '<p style="margin:0 0 24px;padding:12px 16px;background:#faf6ef;border-radius:10px;font:italic 14px/1.5 ' + EM_SERIF + ';color:#4a463e;">' + emEsc(d.message).replace(/\n/g, '<br>') + '</p>' : '') +
     emLabel('Infos pratiques') +
     emBox(
@@ -566,8 +566,9 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    if (event.cron === SYNC_CRON) { try { console.log('sync-cal', JSON.stringify(await syncExternalCalendars(env))); } catch (e) { console.error('sync-cal', String(e && e.message || e)); } return; }
+    if (event.cron === SYNC_CRON) { try { console.log('sync-cal', JSON.stringify(await syncExternalCalendars(env))); } catch (e) { console.error('sync-cal', String(e && e.message || e)); } try { console.log('member-activation', JSON.stringify(await runMemberActivation(env))); } catch (e) { console.error('member-activation', String(e && e.message || e)); } return; }
     await runDailyFeedbackEmailJob(env);
+    try { console.log('balance-reminders', JSON.stringify(await runBalanceReminderEmails(env))); } catch (e) { console.error('balance-reminders', String(e && e.message || e)); }
     try { await purgeOldStayBoards(env); } catch (e) { console.error('purge-stay', String(e && e.message || e)); }
   },
 };
@@ -825,13 +826,13 @@ if (pathname === '/api/admin/blocks' && method === 'GET') { await requireAdmin(r
   if (pathname === '/api/member/reservations' && method === 'GET') {
     const member = await requireMember(request, env);
     const { results } = await env.DB.prepare(
-      `SELECT r.*, (SELECT COUNT(*) FROM guest_feedback g WHERE g.reservation_id = r.id) AS has_feedback, (SELECT CASE WHEN SUM(i.status = 'paid') = COUNT(*) AND COUNT(*) > 0 THEN 'full' WHEN SUM(i.type = 'reservation_deposit' AND i.status = 'paid') > 0 THEN 'deposit' ELSE 'none' END FROM invoices i WHERE i.reservation_id = r.id AND i.type IN ('reservation_deposit', 'reservation_balance') AND i.status != 'cancelled') AS payment_stage
+      `SELECT r.*, (SELECT COUNT(*) FROM guest_feedback g WHERE g.reservation_id = r.id) AS has_feedback, (SELECT CASE WHEN SUM(i.status = 'paid') = COUNT(*) AND COUNT(*) > 0 THEN 'full' WHEN SUM(i.type = 'reservation_deposit' AND i.status = 'paid') > 0 THEN 'deposit' ELSE 'none' END FROM invoices i WHERE i.reservation_id = r.id AND i.type IN ('reservation_deposit', 'reservation_balance') AND i.status != 'cancelled') AS payment_stage, (SELECT amount FROM invoices i WHERE i.reservation_id = r.id AND i.type = 'reservation_deposit' AND i.status != 'cancelled' ORDER BY i.id LIMIT 1) AS deposit_amount, (SELECT amount FROM invoices i WHERE i.reservation_id = r.id AND i.type = 'reservation_balance' AND i.status != 'cancelled' ORDER BY i.id LIMIT 1) AS balance_amount
        FROM reservations r WHERE r.member_id = ? ORDER BY r.check_in DESC`
     ).bind(member.id).all();
     const reservations = (results || []).map((r) => ({
       id: r.id, check_in: r.check_in, check_out: r.check_out, nights: r.nights,
       adults: r.adults, minors: r.minors, price_grand_total: r.price_grand_total,
-      status: r.status, payment_status: r.payment_status, payment_stage: r.payment_stage || 'none', has_feedback: !!r.has_feedback,
+      status: r.status, payment_status: r.payment_status, payment_stage: r.payment_stage || 'none', deposit_amount: r.deposit_amount, balance_amount: r.balance_amount, has_feedback: !!r.has_feedback,
     }));
     return json({ reservations, onlinePayment: !!(env.HELLOASSO_CLIENT_ID && env.HELLOASSO_CLIENT_SECRET && env.HELLOASSO_ORG_SLUG) });
   }
@@ -1191,7 +1192,8 @@ async function createReservation(request, env) {
   const introLine = created
     ? `<p>Un compte adhérent a été créé pour vous. Identifiant : ${email}<br>Mot de passe temporaire (à changer à la première connexion) : <strong>${tempPassword}</strong></p>`
     : '';
-  const emd = { name, email, phone, checkIn, checkOut, adults, minors, wantsCleaning, price, message, paymentMethod, tempPassword: created ? tempPassword : null };
+  if (created) { try { await holdNewMemberAccount(env, member.id, reservationId); } catch (e) { console.error('hold-member', String(e && e.message || e)); } }
+  const emd = { name, email, phone, checkIn, checkOut, adults, minors, wantsCleaning, price, message, paymentMethod, tempPassword: null };
   emailSent = await sendEmail(env, { to: email, subject: 'Chalet Bellevue \u2014 votre demande de r\u00e9servation', html: emailReservationHtml(emd) });
   await sendEmail(env, { to: 'contact@chalet-bellevue.fr', replyTo: email, subject: `Nouvelle demande de r\u00e9servation \u2014 ${name} (${checkIn} \u2192 ${checkOut})`, html: emailAdminNewHtml(emd) }); // Alerte admin (best effort)
   return json({ reservation: { id: reservationId, status: 'pending' }, emailSent }, 201);
@@ -1645,6 +1647,9 @@ async function lastMinuteRoutes(request, env, pathname, method) {
      GET  /api/member/reservations/:id/pay   (adhérent connecté) -> redirection HelloAsso
      GET  /api/payments/helloasso/return     retour navigateur après paiement
      POST /api/payments/helloasso/webhook    URL de callback HelloAsso
+     GET  /api/member/reservations/:id/pay?part=balance   solde (après l'acompte)
+     GET  /api/pay/:jeton                     lien personnel envoyé par e-mail (sans connexion)
+     Tâche toutes les 30 min : e-mail « réservation validée, payez en ligne » (1 fois/résa)
    Règles de sécurité :
      - montant = facture « acompte + adhésion » en base, jamais le navigateur ;
      - seule une réservation CONFIRMÉE de l'adhérent connecté peut être payée ;
@@ -1698,53 +1703,155 @@ async function ensureHaTable(env) {
   ).run();
 }
 
-/** Facture acompte+adhésion encore à payer pour une réservation, ou null. */
-async function haDepositInvoice(env, reservationId) {
-  return await env.DB.prepare(
-    "SELECT id, amount, status FROM invoices WHERE reservation_id = ? AND type = 'reservation_deposit' AND status != 'cancelled' ORDER BY id LIMIT 1"
-  ).bind(reservationId).first();
+/** Factures de séjour d'une réservation : acompte (+ adhésion) et solde. */
+async function haStayInvoices(env, reservationId) {
+  const q = "SELECT id, type, amount, status, due_date FROM invoices WHERE reservation_id = ? AND type = ? AND status != 'cancelled' ORDER BY id LIMIT 1";
+  const dep = await env.DB.prepare(q).bind(reservationId, 'reservation_deposit').first();
+  const bal = await env.DB.prepare(q).bind(reservationId, 'reservation_balance').first();
+  return { dep: dep || null, bal: bal || null };
 }
 
-async function haStartPayment(request, env, reservationId) {
+/** Facture à payer maintenant : l'acompte d'abord, puis le solde.
+ *  part = 'deposit' | 'balance' | 'auto'. Renvoie { inv, code } (code = motif si rien à payer). */
+async function haDueInvoice(env, reservationId, part) {
+  const { dep, bal } = await haStayInvoices(env, reservationId);
+  const depPaid = !dep || dep.status === 'paid';
+  if (part === 'deposit') {
+    if (!dep) return { inv: null, code: 'rien' };
+    return dep.status === 'paid' ? { inv: null, code: 'deja-payee' } : { inv: dep, code: null };
+  }
+  if (part === 'balance') {
+    if (!depPaid) return { inv: null, code: 'acompte-d-abord' };
+    if (!bal) return { inv: null, code: 'rien' };
+    return bal.status === 'paid' ? { inv: null, code: 'deja-payee' } : { inv: bal, code: null };
+  }
+  if (!depPaid) return { inv: dep, code: null };
+  if (bal && bal.status !== 'paid') return { inv: bal, code: null };
+  return { inv: null, code: dep || bal ? 'deja-payee' : 'rien' };
+}
+
+/** Lien de paiement personnel (sans connexion), un par réservation. */
+async function ensurePayLinkTable(env) {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS payment_links (token TEXT PRIMARY KEY, reservation_id INTEGER NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), email_sent_at TEXT)"
+  ).run();
+}
+
+async function payLinkToken(env, reservationId) {
+  await ensurePayLinkTable(env);
+  const row = await env.DB.prepare('SELECT token FROM payment_links WHERE reservation_id = ?').bind(reservationId).first();
+  if (row && row.token) return row.token;
+  const token = randomHex(16);
+  await env.DB.prepare('INSERT OR IGNORE INTO payment_links (token, reservation_id) VALUES (?, ?)').bind(token, reservationId).run();
+  const again = await env.DB.prepare('SELECT token FROM payment_links WHERE reservation_id = ?').bind(reservationId).first();
+  return again.token;
+}
+
+function payLinkUrl(env, token) {
+  return (env.SITE_BASE_URL || EM_SITE) + '/api/pay/' + token;
+}
+
+/** Page de résultat pour les personnes qui paient par le lien reçu par e-mail
+ *  (elles ne sont pas forcément connectées à leur espace). */
+const HA_RESULT = {
+  ok: ['Merci, votre paiement est bien enregistré !', 'Vous recevrez le reçu de HelloAsso par e-mail. Votre réservation est mise à jour automatiquement.'],
+  attente: ['Paiement en cours de confirmation', 'HelloAsso nous confirme votre paiement dans quelques minutes. Inutile de payer une deuxième fois.'],
+  annule: ['Paiement annulé', 'Aucun montant n\'a été prélevé. Vous pouvez réessayer avec le même lien quand vous le souhaitez.'],
+  erreur: ['Le paiement n\'a pas abouti', 'Aucun montant n\'a été prélevé. Vous pouvez réessayer, ou régler par virement, chèque ou espèces.'],
+  'non-validee': ['Réservation pas encore validée', 'Le paiement en ligne s\'ouvre dès que l\'association a validé votre réservation.'],
+  'deja-payee': ['Tout est déjà réglé', 'Il n\'y a plus rien à payer pour cette réservation. Merci !'],
+  rien: ['Rien à régler pour le moment', 'Aucun montant n\'est en attente de paiement pour cette réservation.'],
+  'acompte-d-abord': ['Réglez d\'abord l\'acompte', 'Le solde pourra être payé une fois l\'acompte réglé.'],
+  introuvable: ['Lien de paiement invalide', 'Ce lien n\'est pas reconnu. Contactez-nous à contact@chalet-bellevue.fr.'],
+  indisponible: ['Paiement en ligne indisponible', 'Le paiement en ligne est momentanément indisponible. Réessayez plus tard, ou réglez par virement, chèque ou espèces.'],
+};
+
+function haResultPage(code, status) {
+  const m = HA_RESULT[code] || HA_RESULT.erreur;
+  const good = code === 'ok' || code === 'deja-payee';
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="noindex"><title>' + emEsc(m[0]) + ' — Chalet Bellevue</title></head>' +
+    '<body style="margin:0;background:#efe9dd;font:400 16px/1.6 ' + EM_SANS + ';color:#2b2b2b;">' +
+    '<div style="max-width:520px;margin:40px auto;padding:0 16px;"><div style="background:#fff;border-radius:16px;overflow:hidden;">' +
+    '<div style="background:#1f3d2b;padding:20px 24px;text-align:center;"><div style="font:700 11px ' + EM_SANS + ';letter-spacing:3px;text-transform:uppercase;color:#b98d46;">Association A.C.T.E.S</div>' +
+    '<div style="font:600 28px/1.2 ' + EM_SERIF + ';color:#faf6ef;">Chalet Bellevue</div></div>' +
+    '<div style="padding:28px 28px 32px;"><div style="font-size:34px;line-height:1;margin:0 0 10px;">' + (good ? '✅' : 'ℹ️') + '</div>' +
+    '<h1 style="font:600 24px/1.3 ' + EM_SERIF + ';color:#1f3d2b;margin:0 0 12px;">' + emEsc(m[0]) + '</h1>' +
+    '<p style="margin:0 0 22px;">' + emEsc(m[1]) + '</p>' +
+    '<a href="' + EM_SITE + '/login" style="display:inline-block;background:#1f3d2b;color:#fff;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:999px;">Mon espace adhérent</a>' +
+    '<p style="margin:22px 0 0;font-size:13px;color:#6f6a60;">Une question ? <a href="mailto:contact@chalet-bellevue.fr" style="color:#c0693e;">contact@chalet-bellevue.fr</a> · 05 45 69 25 00</p>' +
+    '</div></div></div></body></html>';
+  return new Response(html, { status: status || 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+}
+
+/** Paiement depuis l'espace adhérent (connecté). part = deposit | balance | auto. */
+async function haStartPayment(request, env, reservationId, part) {
   const member = await requireMember(request, env);
-  const site = env.SITE_BASE_URL || EM_SITE;
-  const back = (code) => Response.redirect(site + '/espace-abonne?paiement=' + code, 302);
   const r = await env.DB.prepare('SELECT * FROM reservations WHERE id = ? AND member_id = ?').bind(reservationId, member.id).first();
   if (!r) return errorResponse('Réservation introuvable.', 404);
+  return await haCheckoutFor(env, r, part || 'deposit', 'espace');
+}
+
+/** Paiement par le lien personnel reçu par e-mail (sans connexion). */
+async function haStartPaymentByLink(env, token) {
+  if (!/^[0-9a-f]{32}$/.test(String(token || ''))) return haResultPage('introuvable', 404);
+  await ensurePayLinkTable(env);
+  const link = await env.DB.prepare('SELECT reservation_id FROM payment_links WHERE token = ?').bind(token).first();
+  if (!link) return haResultPage('introuvable', 404);
+  const r = await env.DB.prepare('SELECT * FROM reservations WHERE id = ?').bind(link.reservation_id).first();
+  if (!r) return haResultPage('introuvable', 404);
+  return await haCheckoutFor(env, r, 'auto', 'lien');
+}
+
+/** Crée le paiement HelloAsso de la prochaine somme due et redirige vers HelloAsso.
+ *  Le montant vient toujours de la facture en base, jamais du navigateur. */
+async function haCheckoutFor(env, r, part, from) {
+  const site = env.SITE_BASE_URL || EM_SITE;
+  const back = (code) => from === 'lien' ? haResultPage(code) : Response.redirect(site + '/espace-abonne?paiement=' + code, 302);
   if (r.status !== 'confirmed') return back('non-validee'); // on ne paie qu'après validation par le bureau
-  const inv = await haDepositInvoice(env, r.id);
-  if (!inv) return errorResponse('Aucun acompte à régler pour cette réservation.', 400);
-  if (inv.status === 'paid') return back('deja-payee');
+  const { inv, code } = await haDueInvoice(env, r.id, part);
+  if (!inv) return back(code || 'rien');
   const amountCents = Math.round(Number(inv.amount) * 100);
-  if (!(amountCents > 0)) return errorResponse('Montant invalide.', 400);
+  if (!(amountCents > 0)) return back('rien');
 
   await ensureHaTable(env);
   const parts = String(r.full_name || '').trim().split(/\s+/);
   const payer = { email: r.email };
   if (parts.length > 1) { payer.firstName = parts[0].slice(0, 50); payer.lastName = parts.slice(1).join(' ').slice(0, 50); }
-
-  const intent = await haApi(env, '/organizations/' + encodeURIComponent(env.HELLOASSO_ORG_SLUG) + '/checkout-intents', {
-    method: 'POST',
-    body: JSON.stringify({
-      totalAmount: amountCents,
-      initialAmount: amountCents,
-      itemName: ('Acompte + adhesion - sejour du ' + r.check_in + ' au ' + r.check_out).slice(0, 250),
-      backUrl: site + '/espace-abonne?paiement=annule',
-      errorUrl: site + '/api/payments/helloasso/return?resa=' + r.id + '&err=1',
-      returnUrl: site + '/api/payments/helloasso/return?resa=' + r.id,
-      containsDonation: false,
-      payer,
-      metadata: { reservationId: r.id, invoiceId: inv.id, amountCents },
-    }),
-  });
-  if (!intent || !intent.id || !intent.redirectUrl) throw httpError('Paiement en ligne indisponible pour le moment.', 502);
+  const isBalance = inv.type === 'reservation_balance';
+  const src = from === 'lien' ? '&src=lien' : '';
+  let intent;
+  try {
+    intent = await haApi(env, '/organizations/' + encodeURIComponent(env.HELLOASSO_ORG_SLUG) + '/checkout-intents', {
+      method: 'POST',
+      body: JSON.stringify({
+        totalAmount: amountCents,
+        initialAmount: amountCents,
+        itemName: ((isBalance ? 'Solde' : 'Acompte + adhesion') + ' - sejour du ' + r.check_in + ' au ' + r.check_out).slice(0, 250),
+        backUrl: from === 'lien' ? site + '/api/payments/helloasso/return?resa=' + r.id + '&annule=1' + src : site + '/espace-abonne?paiement=annule',
+        errorUrl: site + '/api/payments/helloasso/return?resa=' + r.id + '&err=1' + src,
+        returnUrl: site + '/api/payments/helloasso/return?resa=' + r.id + src,
+        containsDonation: false,
+        payer,
+        metadata: { reservationId: r.id, invoiceId: inv.id, amountCents, part: isBalance ? 'balance' : 'deposit' },
+      }),
+    });
+  } catch (e) {
+    console.error('ha-start', String(e && e.message || e));
+    intent = null;
+  }
+  if (!intent || !intent.id || !intent.redirectUrl) {
+    if (from === 'lien') return haResultPage('indisponible', 502);
+    throw httpError('Paiement en ligne indisponible pour le moment.', 502);
+  }
   await env.DB.prepare('INSERT OR REPLACE INTO helloasso_checkouts (checkout_intent_id, reservation_id, invoice_id, amount_cents) VALUES (?, ?, ?, ?)')
     .bind(intent.id, r.id, inv.id, amountCents).run();
   // Lien HelloAsso valable 15 min : créé au clic, jamais à l'avance.
   return Response.redirect(intent.redirectUrl, 302);
 }
 
-/** Relit un checkout auprès de HelloAsso ; s'il est payé, marque l'acompte payé.
+/** Relit un checkout auprès de HelloAsso ; s'il est payé, marque la facture payée
+ *  (acompte ou solde) et met la réservation à jour.
  *  Idempotent : peut être appelé par le retour navigateur ET par le webhook. */
 async function haVerifyCheckout(env, checkoutIntentId) {
   await ensureHaTable(env);
@@ -1761,9 +1868,18 @@ async function haVerifyCheckout(env, checkoutIntentId) {
 
   const inv = await env.DB.prepare('SELECT * FROM invoices WHERE id = ?').bind(row.invoice_id).first();
   if (inv && inv.status !== 'paid' && inv.status !== 'cancelled') {
-    const bal = await env.DB.prepare("SELECT status FROM invoices WHERE reservation_id = ? AND type = 'reservation_balance' AND status != 'cancelled' ORDER BY id LIMIT 1").bind(row.reservation_id).first();
-    // Même effet que le bouton admin « Acompte payé » (ou « Tout payé » si le solde l'était déjà).
-    await updateReservationStatus(env, row.reservation_id, { payment: bal && bal.status === 'paid' ? 'full' : 'deposit' });
+    const { dep, bal } = await haStayInvoices(env, row.reservation_id);
+    if (inv.type === 'reservation_balance') {
+      if (!dep || dep.status === 'paid') {
+        // Même effet que le bouton admin « Tout payé ».
+        await updateReservationStatus(env, row.reservation_id, { payment: 'full' });
+      } else {
+        await env.DB.prepare("UPDATE invoices SET status = 'paid', paid_at = COALESCE(paid_at, ?) WHERE id = ?").bind(nowIso(), inv.id).run();
+      }
+    } else {
+      // Même effet que le bouton admin « Acompte payé » (ou « Tout payé » si le solde l'était déjà).
+      await updateReservationStatus(env, row.reservation_id, { payment: bal && bal.status === 'paid' ? 'full' : 'deposit' });
+    }
     await env.DB.prepare("UPDATE invoices SET notes = TRIM(COALESCE(notes, '') || ' Payé en ligne via HelloAsso (commande ' || ? || ').') WHERE id = ?")
       .bind(String(order.id), row.invoice_id).run();
   }
@@ -1776,13 +1892,15 @@ async function haReturn(request, env) {
   const url = new URL(request.url);
   const site = env.SITE_BASE_URL || EM_SITE;
   let code = 'erreur';
-  if (!url.searchParams.get('err')) {
+  if (url.searchParams.get('annule')) code = 'annule';
+  else if (!url.searchParams.get('err')) {
     code = 'attente';
     const ciId = url.searchParams.get('checkoutIntentId');
     if (ciId && url.searchParams.get('code') === 'succeeded') {
       try { if ((await haVerifyCheckout(env, ciId)).paid) code = 'ok'; } catch (e) { console.error('ha-return', String(e && e.message || e)); }
     }
   }
+  if (url.searchParams.get('src') === 'lien') return haResultPage(code);
   return Response.redirect(site + '/espace-abonne?paiement=' + code, 302);
 }
 
@@ -1791,6 +1909,8 @@ async function haWebhook(request, env) {
   try {
     const meta = (body && body.metadata) || {};
     const data = (body && body.data) || {};
+    // Paiements créés par le logiciel (espace séjour, demandes de paiement) : transmis à la fonction HelloAsso du logiciel, qui revérifie auprès de HelloAsso.
+    if (meta.demande || meta.resa) { try { await fetch('https://qmggmwdfzsacjpykvjvf.supabase.co/functions/v1/helloasso', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }); } catch (e) { console.error('ha-webhook-logiciel', String(e && e.message || e)); } }
     const ids = new Set();
     if (data.checkoutIntentId) ids.add(Number(data.checkoutIntentId));
     if (data.order && data.order.checkoutIntentId) ids.add(Number(data.order.checkoutIntentId));
@@ -1807,16 +1927,74 @@ async function haWebhook(request, env) {
   return json({ ok: true }); // toujours 200 : HelloAsso ne doit pas réessayer en boucle
 }
 
+/** E-mail « réservation validée : payez en ligne » avec le lien personnel.
+ *  Envoyé une seule fois par réservation, par la tâche planifiée (toutes les 30 min),
+ *  dès qu'une réservation est validée et que son acompte reste à payer. */
+function emailPayLinkHtml(d) {
+  const rows = [emRow('Acompte + adhésion', emEur(d.depositAmount), { bold: true })];
+  if (d.balanceAmount) rows.push(emRow('Solde' + (d.balanceDue ? ' (avant le ' + emDate(d.balanceDue) + ')' : ''), emEur(d.balanceAmount)));
+  const body =
+    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>bonne nouvelle : votre réservation est <strong>validée</strong> par l\'association.</p>' +
+    emStay(d.checkIn, d.checkOut) +
+    emLabel('À régler') + emTable(rows) + '<div style="height:18px;"></div>' +
+    '<p style="margin:0 0 14px;">Vous pouvez régler l\'acompte en ligne, en quelques clics, par carte bancaire :</p>' +
+    emButton(d.link, 'Payer l\'acompte en ligne') + '<div style="height:10px;"></div>' +
+    '<p style="margin:0 0 18px;font:400 13px/1.6 ' + EM_SANS + ';color:#6f6a60;">Ce lien est personnel : gardez ce mail, il vous servira aussi à régler le solde le moment venu. ' +
+    'Paiement sécurisé par HelloAsso, la plateforme de paiement de l\'association. HelloAsso peut vous proposer une contribution volontaire à son fonctionnement : elle est facultative.<br>' +
+    'Si le bouton ne fonctionne pas : <a href="' + d.link + '" style="color:#c0693e;">' + d.link + '</a></p>' +
+    '<p style="margin:0 0 18px;font:400 14px ' + EM_SANS + ';">Vous préférez le virement, le chèque ou les espèces ? C\'est toujours possible : répondez simplement à ce mail. ' +
+    'Vous pouvez aussi payer depuis <a href="' + EM_SITE + '/login" style="color:#c0693e;">votre espace adhérent</a>.</p>' +
+    '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">À très bientôt à Luchon,<br>L\'équipe de l\'association A.C.T.E.S</p>';
+  return emLayout({ title: 'Votre réservation est validée', preheader: 'Réglez votre acompte en ligne — séjour du ' + emDate(d.checkIn), body: body });
+}
+
+async function runPayLinkEmails(env) {
+  if (!(env.HELLOASSO_CLIENT_ID && env.HELLOASSO_CLIENT_SECRET && env.HELLOASSO_ORG_SLUG) || !env.RESEND_API_KEY) return { skipped: true };
+  await ensurePayLinkTable(env);
+  const { results } = await env.DB.prepare(
+    "SELECT r.* FROM reservations r WHERE r.status = 'confirmed' AND r.check_out >= ? AND r.email IS NOT NULL AND r.email != '' " +
+    "AND EXISTS (SELECT 1 FROM invoices i WHERE i.reservation_id = r.id AND i.type = 'reservation_deposit' AND i.status = 'pending') " +
+    "AND NOT EXISTS (SELECT 1 FROM payment_links p WHERE p.reservation_id = r.id AND p.email_sent_at IS NOT NULL) ORDER BY r.id LIMIT 20"
+  ).bind(todayIso()).all();
+  let sent = 0;
+  for (const r of results || []) {
+    const { dep, bal } = await haStayInvoices(env, r.id);
+    if (!dep || dep.status !== 'pending') continue;
+    const token = await payLinkToken(env, r.id);
+    const ok = await sendEmail(env, {
+      to: r.email,
+      subject: 'Chalet Bellevue — réservation validée : réglez votre acompte en ligne',
+      html: emailPayLinkHtml({
+        name: r.full_name, checkIn: r.check_in, checkOut: r.check_out, link: payLinkUrl(env, token),
+        depositAmount: dep.amount, balanceAmount: bal && bal.status !== 'paid' ? bal.amount : 0, balanceDue: bal ? bal.due_date : null,
+      }),
+    });
+    if (ok) {
+      await env.DB.prepare('UPDATE payment_links SET email_sent_at = ? WHERE reservation_id = ?').bind(nowIso(), r.id).run();
+      sent++;
+    }
+  }
+  return { sent };
+}
+
 async function helloAssoRoutes(request, env, pathname, method) {
   let m;
   const isPay = (m = matchRoute('/api/member/reservations/:id/pay', pathname)) && method === 'GET';
+  const link = !isPay && matchRoute('/api/pay/:token', pathname);
+  const isLink = !!link && method === 'GET';
   const isReturn = pathname === '/api/payments/helloasso/return' && method === 'GET';
   const isHook = pathname === '/api/payments/helloasso/webhook' && method === 'POST';
-  if (!isPay && !isReturn && !isHook) return null;
+  if (!isPay && !isLink && !isReturn && !isHook) return null;
   if (!env.HELLOASSO_CLIENT_ID || !env.HELLOASSO_CLIENT_SECRET || !env.HELLOASSO_ORG_SLUG) {
-    return isHook ? json({ ok: true }) : errorResponse('Le paiement en ligne n\'est pas encore activé. Règlement par chèque, espèces ou virement.', 503);
+    if (isHook) return json({ ok: true });
+    if (isLink) return haResultPage('indisponible', 503);
+    return errorResponse('Le paiement en ligne n\'est pas encore activé. Règlement par chèque, espèces ou virement.', 503);
   }
-  if (isPay) return await haStartPayment(request, env, Number(m.id));
+  if (isPay) {
+    const part = new URL(request.url).searchParams.get('part');
+    return await haStartPayment(request, env, Number(m.id), ['deposit', 'balance', 'auto'].includes(part) ? part : 'deposit');
+  }
+  if (isLink) return await haStartPaymentByLink(env, link.token);
   if (isReturn) return await haReturn(request, env);
   return await haWebhook(request, env);
 }
@@ -1956,4 +2134,134 @@ async function syncPlatformFeed(env, token, platform) {
   return new Response(lines.join('\r\n') + '\r\n', {
     headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-cache' },
   });
+}
+
+/* =========================================================================
+   14. RELANCE DU SOLDE (ajout du 23/11/2026)
+   - Tâche quotidienne (cron du matin) : e-mail « solde à régler » avec le lien
+     de paiement personnel, une seule fois par réservation, à partir de 7 jours
+     avant l'échéance du solde (facture reservation_balance, ou arrivée - 30 j).
+   Le mail « réservation validée » avec lien (runPayLinkEmails) n'est plus envoyé :
+   la confirmation du logiciel de gestion fait foi (décision de Robin, 23/11).
+   ========================================================================= */
+
+const BAL_REMIND_DAYS_BEFORE = 7;
+
+async function ensurePayReminderTable(env) {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS pay_reminders (reservation_id INTEGER PRIMARY KEY, balance_sent_at TEXT)"
+  ).run();
+}
+
+function emailBalanceHtml(d) {
+  const body =
+    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>votre séjour au Chalet Bellevue approche !</p>' +
+    emStay(d.checkIn, d.checkOut) +
+    emLabel('Reste à régler') +
+    emTable([emRow('Solde de la location' + (d.due ? ' · avant le ' + emDate(d.due) : ''), emEur(d.amount), { bold: true })]) +
+    '<div style="height:18px;"></div>' +
+    '<p style="margin:0 0 14px;">Vous pouvez le régler en ligne, par carte bancaire :</p>' +
+    emButton(d.link, 'Payer le solde en ligne') + '<div style="height:10px;"></div>' +
+    '<p style="margin:0 0 18px;font:400 13px/1.6 ' + EM_SANS + ';color:#6f6a60;">Paiement sécurisé par HelloAsso, la plateforme de paiement de l\'association. ' +
+    'HelloAsso peut vous proposer une contribution volontaire à son fonctionnement : elle est facultative.<br>' +
+    'Si le bouton ne fonctionne pas : <a href="' + d.link + '" style="color:#c0693e;">' + d.link + '</a></p>' +
+    '<p style="margin:0 0 18px;font:400 14px ' + EM_SANS + ';">Vous préférez le virement, le chèque ou les espèces ? C\'est toujours possible : répondez simplement à ce mail. ' +
+    'Si vous avez déjà réglé, merci et ignorez ce message.</p>' +
+    '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">À très bientôt à Luchon,<br>L\'équipe de l\'association A.C.T.E.S</p>';
+  return emLayout({ title: 'Le solde de votre séjour', preheader: 'Solde à régler : ' + emEur(d.amount).replace(' ', ' ') + ' — paiement en ligne possible', body: body });
+}
+
+async function runBalanceReminderEmails(env) {
+  if (!(env.HELLOASSO_CLIENT_ID && env.HELLOASSO_CLIENT_SECRET && env.HELLOASSO_ORG_SLUG) || !env.RESEND_API_KEY) return { skipped: true };
+  await ensurePayLinkTable(env);
+  await ensurePayReminderTable(env);
+  const today = todayIso();
+  const limit = addDaysIso(today, BAL_REMIND_DAYS_BEFORE);
+  const { results } = await env.DB.prepare(
+    "SELECT r.*, b.id AS bal_id, b.amount AS bal_amount, COALESCE(b.due_date, date(r.check_in, '-30 days')) AS bal_due " +
+    "FROM reservations r JOIN invoices b ON b.reservation_id = r.id AND b.type = 'reservation_balance' AND b.status = 'pending' " +
+    "WHERE r.status = 'confirmed' AND r.check_in >= ? AND r.email IS NOT NULL AND r.email != '' " +
+    "AND COALESCE(b.due_date, date(r.check_in, '-30 days')) <= ? " +
+    "AND NOT EXISTS (SELECT 1 FROM invoices d WHERE d.reservation_id = r.id AND d.type = 'reservation_deposit' AND d.status = 'pending') " +
+    "AND NOT EXISTS (SELECT 1 FROM pay_reminders p WHERE p.reservation_id = r.id AND p.balance_sent_at IS NOT NULL) ORDER BY r.id LIMIT 20"
+  ).bind(today, limit).all();
+  let sent = 0;
+  for (const r of results || []) {
+    if (!(Number(r.bal_amount) > 0)) continue;
+    const token = await payLinkToken(env, r.id);
+    const ok = await sendEmail(env, {
+      to: r.email,
+      subject: 'Chalet Bellevue — solde de votre séjour : ' + emEur(r.bal_amount).replace(' ', ' '),
+      html: emailBalanceHtml({ name: r.full_name, checkIn: r.check_in, checkOut: r.check_out, amount: r.bal_amount, due: r.bal_due, link: payLinkUrl(env, token) }),
+    });
+    if (ok) {
+      await env.DB.prepare('INSERT OR REPLACE INTO pay_reminders (reservation_id, balance_sent_at) VALUES (?, ?)').bind(r.id, nowIso()).run();
+      sent++;
+    }
+  }
+  return { sent };
+}
+
+
+
+/* =========================================================================
+   15. OUVERTURE DE L'ESPACE ADHÉRENT APRÈS VALIDATION + PAIEMENT (23/11/2026)
+   Demande de Robin : à la demande de réservation, le client n'a accès qu'à son
+   espace séjour (code envoyé par le logiciel). Le compte adhérent créé par la
+   demande reste fermé (active = 0) et ses identifiants ne sont envoyés qu'une
+   fois la réservation validée ET l'acompte réglé (tâche toutes les 30 min).
+   Les comptes déjà existants ne sont pas touchés.
+   ========================================================================= */
+
+async function ensureActivationTable(env) {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS member_activation (member_id INTEGER PRIMARY KEY, reservation_id INTEGER, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), activated_at TEXT)"
+  ).run();
+}
+
+/** Appelé à la création d'une demande quand le compte vient d'être créé : compte fermé en attendant. */
+async function holdNewMemberAccount(env, memberId, reservationId) {
+  await ensureActivationTable(env);
+  await env.DB.prepare('UPDATE members SET active = 0 WHERE id = ?').bind(memberId).run();
+  await env.DB.prepare('INSERT OR IGNORE INTO member_activation (member_id, reservation_id) VALUES (?, ?)').bind(memberId, reservationId).run();
+}
+
+function emailAccountOpenHtml(d) {
+  const body =
+    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>votre réservation est validée et votre acompte est réglé : merci ! Votre espace adhérent A.C.T.E.S est maintenant ouvert.</p>' +
+    emLabel('Vos identifiants') +
+    emBox('<div style="font:400 14px/1.9 ' + EM_SANS + ';">Identifiant : <strong>' + emEsc(d.email) + '</strong><br>Mot de passe temporaire : ' +
+      '<span style="display:inline-block;font:700 15px Consolas,Menlo,monospace;background:#ffffff;border:1px dashed #b98d46;border-radius:6px;padding:2px 10px;color:#1f3d2b;">' + emEsc(d.tempPassword) + '</span></div>' +
+      '<div style="font-size:12px;color:#6f6a60;margin:8px 0 12px;">À changer dès votre première connexion.</div>' +
+      emButton(EM_SITE + '/login', 'Accéder à mon espace adhérent')) +
+    '<p style="margin:0 0 18px;font:400 14px ' + EM_SANS + ';">Votre espace séjour reste accessible avec le même lien qu\'avant pour l\'organisation de votre séjour.</p>' +
+    '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">À très bientôt à Luchon,<br>L\'équipe de l\'association A.C.T.E.S</p>';
+  return emLayout({ title: 'Votre espace adhérent est ouvert', preheader: 'Réservation validée et acompte réglé', body: body });
+}
+
+async function runMemberActivation(env) {
+  await ensureActivationTable(env);
+  const { results } = await env.DB.prepare(
+    "SELECT m.id, m.email, m.full_name FROM members m JOIN member_activation a ON a.member_id = m.id AND a.activated_at IS NULL " +
+    "WHERE m.active = 0 AND m.email NOT LIKE '%.invalid' AND EXISTS (SELECT 1 FROM reservations r WHERE r.member_id = m.id AND r.status = 'confirmed' " +
+    "AND (r.payment_status = 'paid' OR EXISTS (SELECT 1 FROM invoices i WHERE i.reservation_id = r.id AND i.type = 'reservation_deposit' AND i.status = 'paid'))) LIMIT 20"
+  ).all();
+  let opened = 0;
+  for (const m of results || []) {
+    const tempPassword = generateTempPassword();
+    const salt = randomHex(16);
+    const hash = await hashPassword(tempPassword, salt);
+    await env.DB.prepare('UPDATE members SET password_hash = ?, password_salt = ?, must_change_password = 1 WHERE id = ?').bind(hash, salt, m.id).run();
+    const ok = await sendEmail(env, {
+      to: m.email,
+      subject: 'Chalet Bellevue — votre espace adhérent est ouvert',
+      html: emailAccountOpenHtml({ name: m.full_name, email: m.email, tempPassword }),
+    });
+    if (ok) {
+      await env.DB.prepare('UPDATE members SET active = 1 WHERE id = ?').bind(m.id).run();
+      await env.DB.prepare('UPDATE member_activation SET activated_at = ? WHERE member_id = ?').bind(nowIso(), m.id).run();
+      opened++;
+    }
+  }
+  return { opened };
 }
