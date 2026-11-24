@@ -409,7 +409,7 @@ Deno.serve(async (req) => {
         }
       }
       out.sync = {
-        resas: resas.filter((r) => r.siteId).map((r) => ({ siteId: String(r.siteId), statut: r.statut || "demande", paye: paye(r) })),
+        resas: resas.filter((r) => r.siteId).map((r) => ({ siteId: String(r.siteId), statut: r.statut || "demande", paye: paye(r), acompte: acompteDe(r, config(cfg)) })),
         infosPratiques: cfg.publierInfos ? texte(cfg.infosPratiques) : null,
         // Toutes les dates bloquées à venir, jour par jour (le relais les compare à celles du site)
         blocages: blocages.filter((b: any) => b.debut && b.fin && b.fin > depuis).flatMap((b: any) => {

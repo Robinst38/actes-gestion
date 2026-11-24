@@ -336,15 +336,120 @@ async function verifierPaiements(sb: any, resaId: string, seulement?: string) {
   return { enregistres: nouveaux };
 }
 
+// ----- demandes de paiement (24/11/2026) -----
+// Le bureau crée depuis le logiciel un lien de paiement HelloAsso d'un montant libre (adhésion seule,
+// acompte, solde, autre) pour une réservation, un membre ou un client. Le paiement est relu auprès de
+// HelloAsso (jamais cru sur parole) puis enregistré : dans la réservation, ou en cotisation du membre.
+const COL_DP = "crm_paiements_demandes";
+const MOTIFS_DP: Record<string, string> = { adhesion: "Adhésion", acompte: "Acompte", solde: "Solde", autre: "Paiement" };
+const PAGE_DP = URL_SITE + "/sejour/paiement-recu";
+
+async function creerDemande(sb: any, qui: { email: string }, b: any) {
+  const montant = r2(num(b.montant));
+  if (!(montant >= 1 && montant <= 20000)) throw new Error("Montant invalide (entre 1 et 20 000 €).");
+  const motif = MOTIFS_DP[b.motif] ? String(b.motif) : "autre";
+  const c = b.cible || {};
+  const cible = { type: ["resa", "membre", "client"].includes(c.type) ? c.type : "libre", id: String(c.id || "").slice(0, 80), nom: String(c.nom || "").slice(0, 120) };
+  const email = String(b.email || "").trim().slice(0, 200);
+  const libelle = (String(b.libelle || "").trim() || (MOTIFS_DP[motif] + (cible.nom ? " — " + cible.nom : ""))).slice(0, 200);
+  const id = "dp" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const intent = await creerPaiement({ montant, libelle, email, contact: String(b.contact || cible.nom || ""), metadata: { demande: id },
+    retour: PAGE_DP + "?d=" + id, erreur: PAGE_DP + "?d=" + id + "&e=1", annuler: PAGE_DP + "?d=" + id + "&a=1" });
+  const doc = { id, motif, libelle, montant, email, cible, intentId: String(intent.id), url: String(intent.redirectUrl || ""), statut: "attente", le: new Date().toISOString(), par: qui.email };
+  await ecrireDoc(sb, COL_DP, id, doc);
+  return doc;
+}
+
+async function verifierDemande(sb: any, id: string) {
+  const d = await lireDoc(sb, COL_DP, id);
+  if (!d) return null;
+  if (d.statut === "paye") return d;
+  const p = await lirePaiement(d.intentId);
+  if (!(p.paye && p.montant > 0)) return d;
+  const maj = { statut: "paye", payeLe: p.date, montantPaye: p.montant, orderId: p.orderId };
+  await fusionDoc(sb, COL_DP, id, maj);
+  const ref = "ha_" + (p.orderId || d.intentId);
+  try {
+    if (d.cible && d.cible.type === "resa" && d.cible.id) {
+      const r = await lireDoc(sb, "crm_actes_resas", d.cible.id);
+      if (r && !(r.paiements || []).some((x: any) => String(x.id) === ref)) {
+        const type = d.motif === "solde" ? "solde" : d.motif === "acompte" ? "acompte" : "autre";
+        await fusionDoc(sb, "crm_actes_resas", d.cible.id, { paiements: [...(r.paiements || []), { id: ref, date: p.date, montant: p.montant, mode: "HelloAsso", type, ref: p.orderId, lib: d.libelle }] });
+      }
+    } else if (d.cible && d.cible.type === "membre" && d.cible.id && d.motif === "adhesion") {
+      const m = await lireDoc(sb, "crm_actes_membres", d.cible.id);
+      if (m) {
+        const an = String(p.date || auj()).slice(0, 4);
+        const co = Object.assign({}, m.cotisations || {});
+        co[an] = { montant: String(p.montant), date: p.date, mode: "HelloAsso" };
+        const patch: Record<string, unknown> = { cotisations: co };
+        if (an === String(new Date().getFullYear())) patch.cotisationPayee = true;
+        await fusionDoc(sb, "crm_actes_membres", d.cible.id, patch);
+      }
+    }
+  } catch (e) { console.error("demande-paiement enregistrement", String(e)); }
+  if (smtpConfigure()) {
+    const dest = Deno.env.get("SMTP_USER");
+    if (dest) await envoyer({ to: dest, subject: "Paiement en ligne reçu : " + eur(p.montant) + " — " + (d.cible && d.cible.nom || d.libelle),
+      body: "Bonjour,\n\nUn paiement en ligne (HelloAsso) de " + eur(p.montant) + " vient d'être reçu.\nObjet : " + d.libelle + "\n" +
+        (d.cible && d.cible.type === "resa" ? "Il est enregistré dans la réservation (Tarif & paiements).\n" : d.cible && d.cible.type === "membre" && d.motif === "adhesion" ? "La cotisation " + String(p.date).slice(0, 4) + " du membre est marquée payée (Vie associative).\n" : "Pense à l'enregistrer si besoin.\n") +
+        "\nLe logiciel A.C.T.E.S" }).catch(() => {});
+  }
+  return { ...d, ...maj };
+}
+
 // ----- helloasso/index.ts -----
-// Notifications de HelloAsso (à déclarer dans HelloAsso › Mon compte › Intégrations et API › URL de notification).
+// Notifications de HelloAsso + demandes de paiement créées depuis le logiciel.
 // Le contenu reçu n'est jamais cru tel quel : on relit chaque paiement auprès de l'API HelloAsso avant de l'enregistrer.
 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST" || !helloassoConfigure()) return json({ ok: true });
+  if (req.method !== "POST") return json({ ok: true });
   const b = await req.json().catch(() => null);
+  const action = b && typeof b.action === "string" ? b.action : "";
+  if (action.startsWith("demande-")) {
+    if (!helloassoConfigure()) return erreur("Paiement en ligne non configuré (HelloAsso).", 503);
+    const sb = admin();
+    try {
+      if (action === "demande-verifier") {
+        const id = String(b.id || "");
+        if (!/^dp[a-z0-9]{4,30}$/.test(id)) return erreur("Demande inconnue.", 404);
+        const d = await verifierDemande(sb, id);
+        if (!d) return erreur("Demande inconnue.", 404);
+        return json({ statut: d.statut, montant: d.montantPaye || d.montant, libelle: d.libelle });
+      }
+      const qui = await autoriser(req, ["admin", "bureau"]);
+      if (!qui) return erreur("Non autorisé.", 401);
+      if (action === "demande-creer") return json(await creerDemande(sb, qui, b));
+      if (action === "demande-liste") {
+        const t = String(b.type || ""), id = String(b.id || "");
+        const l = (await lireCollection(sb, COL_DP)).filter((d: any) => !t || (d.cible && d.cible.type === t && (!id || d.cible.id === id)));
+        for (const d of l) if (d.statut === "attente" && Date.now() - Date.parse(d.le || "") < 90 * 864e5) { try { Object.assign(d, await verifierDemande(sb, d.id)); } catch (_) {} }
+        l.sort((x: any, y: any) => String(y.le).localeCompare(String(x.le)));
+        return json({ demandes: l.slice(0, 50) });
+      }
+      if (action === "demande-annuler") {
+        const d = await lireDoc(sb, COL_DP, String(b.id || ""));
+        if (!d) return erreur("Demande inconnue.", 404);
+        if (d.statut === "paye") return erreur("Déjà payée : impossible d'annuler.", 409);
+        await fusionDoc(sb, COL_DP, d.id, { statut: "annule" });
+        return json({ ok: true });
+      }
+      return erreur("Action inconnue.");
+    } catch (e) {
+      const msg = String((e as Error).message || e);
+      console.error("demande-paiement", msg);
+      if (/^Montant invalide/.test(msg)) return erreur(msg, 400);
+      return erreur("HelloAsso : " + msg.slice(0, 200), 502);
+    }
+  }
+  if (!helloassoConfigure()) return json({ ok: true });
+  const dem = b && ((b.metadata && b.metadata.demande) || (b.data && b.data.meta && b.data.meta.demande));
+  if (dem && /^dp[a-z0-9]{4,30}$/.test(String(dem))) {
+    try { await verifierDemande(admin(), String(dem)); } catch (e) { console.error("helloasso", String(e)); }
+    return json({ ok: true });
+  }
   const resa = b && ((b.metadata && b.metadata.resa) || (b.data && b.data.meta && b.data.meta.resa));
   if (resa && /^[\w-]{1,80}$/.test(String(resa))) {
     try { await verifierPaiements(admin(), String(resa)); } catch (e) { console.error("helloasso", String(e)); }
