@@ -516,7 +516,7 @@ L'organisateur s'engage à :
 
 ## Numéros d'urgence
 
-Sapeurs-pompiers : 18 · SAMU : 15 · Numéro d'urgence européen : 112 · A.C.T.E.S. : 05 45 69 25 00`,
+Sapeurs-pompiers : 18 · SAMU : 15 · Numéro d'urgence européen : 112`,
   },
 ];
 /** Documents signés d'une réservation (une acceptation en ligne de l'ancien contrat vaut convention d'utilisation).
