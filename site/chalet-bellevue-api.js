@@ -157,7 +157,7 @@ async function getCurrentMember(request, env) {
   const token = cookies[SESSION_COOKIE];
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT m.* FROM sessions s JOIN members m ON m.id = s.member_id
+    `SELECT m.*, s.prenom AS session_prenom FROM sessions s JOIN members m ON m.id = s.member_id
      WHERE s.token = ? AND s.expires_at > ?`
   ).bind(token, nowIso()).first();
   return row || null;
@@ -170,6 +170,8 @@ function meShape(member) {
     fullName: member.full_name,
     email: member.email,
     mustChangePassword: !!member.must_change_password,
+    prenom: member.session_prenom || null,
+    compteBureau: String(member.email || '').toLowerCase() === COMPTE_PARTAGE,
   };
 }
 
@@ -557,7 +559,9 @@ export default {
 
     let response;
     try {
+      const __jr = (pathname.indexOf('/api/admin/') === 0 && method !== 'GET') ? request.clone() : null;
       response = await route(request, env, ctx, pathname, method);
+      if (__jr && response && response.status < 400) ctx.waitUntil(journaliser(__jr, env, pathname, method).catch(function () {}));
     } catch (e) {
       response = errorResponse(e.message || 'Erreur serveur.', e.status || 500);
     }
@@ -710,12 +714,15 @@ async function resetRoutes(request, env, pathname, method) { if (method !== 'POS
     if (!member) return errorResponse('Identifiants incorrects.', 401);
     const ok = await verifyPassword(password, member.password_salt, member.password_hash);
     if (!ok) return errorResponse('Identifiants incorrects.', 401);
+    const prenomSession = nettoyerPrenom(body.prenom);
+    if (email === COMPTE_PARTAGE && !prenomSession) return errorResponse('Compte bureau partagé : indiquez votre prénom pour vous connecter.', 400);
     const token = randomHex(32);
     const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
-    await env.DB.prepare('INSERT INTO sessions (token, member_id, expires_at) VALUES (?, ?, ?)')
-      .bind(token, member.id, expiresAt).run();
+    await env.DB.prepare('INSERT INTO sessions (token, member_id, expires_at, prenom) VALUES (?, ?, ?, ?)')
+      .bind(token, member.id, expiresAt, prenomSession).run();
+    if (member.role === 'admin' || member.is_bureau) { try { await env.DB.prepare('INSERT INTO admin_journal (prenom, email, methode, chemin, detail) VALUES (?, ?, ?, ?, ?)').bind(prenomSession, member.email, 'POST', '/api/admin/connexion', '').run(); } catch (e) {} }
     return json(
-      { role: (member.role === 'admin' || member.is_bureau) ? 'admin' : member.role, bureau: !!member.is_bureau && member.role !== 'admin', fullName: member.full_name, email: member.email, mustChangePassword: !!member.must_change_password },
+      { role: (member.role === 'admin' || member.is_bureau) ? 'admin' : member.role, bureau: !!member.is_bureau && member.role !== 'admin', fullName: member.full_name, email: member.email, mustChangePassword: !!member.must_change_password, prenom: prenomSession },
       200,
       { 'Set-Cookie': sessionCookieHeader(token, SESSION_DAYS * 86400) }
     );
@@ -748,6 +755,7 @@ async function resetRoutes(request, env, pathname, method) { if (method !== 'POS
 { const bm = /^\/api\/ical\/([A-Za-z0-9]+)-blocages\.ics$/.exec(pathname); if (bm && method === 'GET') return await icalBlocks(env, bm[1]); }
 { const pm = /^\/api\/ical\/([A-Za-z0-9]+)-plateformes-(booking|airbnb)\.ics$/.exec(pathname); if (pm && method === 'GET') return await syncPlatformFeed(env, pm[1], pm[2]); }
 if (pathname === '/api/admin/sync-calendars' && method === 'POST') { await requireAdmin(request, env); return json(await syncExternalCalendars(env)); }
+if (pathname === '/api/admin/journal' && method === 'GET') { await requireAdmin(request, env); const { results } = await env.DB.prepare('SELECT le, prenom, email, methode, chemin, detail FROM admin_journal ORDER BY id DESC LIMIT 300').all(); return json({ journal: results || [] }); }
 if (pathname === '/api/admin/blocks' && method === 'GET') { await requireAdmin(request, env); const { results } = await env.DB.prepare("SELECT date, reason FROM blocked_dates WHERE type = 'blocked' ORDER BY date").all(); return json({ blocks: results || [] }); }
   // ---------------------------------------------------------- DISPONIBILITÉ
   if (pathname === '/api/availability' && method === 'GET') {
@@ -2264,4 +2272,33 @@ async function runMemberActivation(env) {
     }
   }
   return { opened };
+}
+
+
+/* =========================================================================
+   COMPTE PARTAGÉ BUREAU — prénom obligatoire + journal des actions (24/11/2026)
+   ========================================================================= */
+const COMPTE_PARTAGE = 'bureau@chalet-bellevue.fr';
+function nettoyerPrenom(v) {
+  const p = String(v || '').replace(/[<>"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  return p.length >= 2 ? p : null;
+}
+async function journaliser(req, env, pathname, method) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  let prenom = null, email = null;
+  if (token) {
+    const s = await env.DB.prepare('SELECT s.prenom, m.email FROM sessions s JOIN members m ON m.id = s.member_id WHERE s.token = ?').bind(token).first();
+    if (s) { prenom = s.prenom; email = s.email; }
+  }
+  let detail = '';
+  const ct = req.headers.get('content-type') || '';
+  if (ct.indexOf('json') >= 0) {
+    try {
+      const o = JSON.parse(await req.text());
+      if (o && typeof o === 'object') for (const k of Object.keys(o)) if (/pass|token|secret|content|html|data/i.test(k)) o[k] = '…';
+      detail = JSON.stringify(o);
+    } catch (e) {}
+  } else if (ct) detail = '(fichier)';
+  await env.DB.prepare('INSERT INTO admin_journal (prenom, email, methode, chemin, detail) VALUES (?, ?, ?, ?, ?)')
+    .bind(prenom, email, method, pathname, detail.slice(0, 500)).run();
 }
