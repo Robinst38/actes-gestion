@@ -1,6 +1,6 @@
 /* Service worker : l'appli s'ouvre instantanément et reste affichable sans réseau.
    Les données (Supabase) ne sont jamais mises en cache ici. */
-const VERSION = "ouvrir-resa-20261124";
+const VERSION = "planning-xl-20261124";
 const CACHE = "actes-" + VERSION;
 const COQUILLE = ["./", "index.html", "app.css", "config.js", "supabase.js", "591.supabase.js", "claude-shim.js?v=20261124q", "qr-virement.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icon.svg", "favicon.ico"];
 
