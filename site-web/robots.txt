@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /login
+Disallow: /espace-abonne
+Disallow: /espace-admin
+Disallow: /retour
+Sitemap: https://www.chalet-bellevue.fr/sitemap.xml
