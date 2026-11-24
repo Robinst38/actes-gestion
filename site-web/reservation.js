@@ -396,6 +396,7 @@ async function submitRequest(method) {
   let sentToBackend = false;
   let backendError = null;
   let emailSent = false;
+  let sejour = null;
 
   if (apiConfigured()) {
     submitBtn.disabled = true;
@@ -411,6 +412,7 @@ async function submitRequest(method) {
       if (!res.ok) throw new Error((data && data.error) || 'Erreur ' + res.status);
       sentToBackend = true;
       emailSent = !!(data && data.emailSent);
+      if (data && typeof data.sejour === 'string' && /^\/sejour\/[a-f0-9]{24,64}$/.test(data.sejour)) sejour = data.sejour;
     } catch (e) {
       backendError = e.message;
       console.warn('Chalet Bellevue — envoi de la demande au backend impossible :', e.message);
@@ -430,6 +432,17 @@ async function submitRequest(method) {
   const titleEl = document.getElementById('bk-confirm-title');
   const iconEl = confirmEl.querySelector('.icon-ok');
 
+  if (sentToBackend && method === 'online' && sejour) {
+    // Réservation directe : le client part tout de suite dans son espace séjour (bulletin, signature, acompte en ligne).
+    if (iconEl) { iconEl.textContent = '✓'; iconEl.classList.remove('is-error'); }
+    if (titleEl) titleEl.textContent = 'Vos dates sont réservées pour vous !';
+    document.getElementById('bk-confirm-text').innerHTML =
+      `<p>Séjour du ${stay}.</p>` +
+      `<p>Vous allez être redirigé vers votre <strong>espace séjour</strong> pour remplir votre bulletin d'adhésion, signer les documents et régler l'acompte en ligne.</p>` +
+      `<p><a class="btn btn-primary" href="${sejour}">Ouvrir mon espace séjour</a></p>`;
+    setTimeout(() => { location.href = sejour; }, 2500);
+    return;
+  }
   if (sentToBackend) {
     if (iconEl) { iconEl.textContent = '✓'; iconEl.classList.remove('is-error'); }
     if (titleEl) titleEl.textContent = 'Merci, votre demande est bien envoyée !';
@@ -498,6 +511,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('bk-pay-online-btn').addEventListener('click', () => {
     document.getElementById('bk-form-panel').classList.add('is-open');
     document.getElementById('bk-form-panel').dataset.method = 'online';
+  });
+  // Réservation directe avec paiement de l'acompte (en test : visible seulement avec ?paiement=test dans l'adresse).
+  try {
+    const q = new URLSearchParams(location.search).get('paiement');
+    if (q === 'test') sessionStorage.setItem('bkDirect', '1');
+    if (q === 'off') sessionStorage.removeItem('bkDirect');
+    if (sessionStorage.getItem('bkDirect') === '1') {
+      const b = document.getElementById('bk-pay-online-btn');
+      b.textContent = "Réserver et payer l'acompte en ligne";
+      b.style.setProperty('display', 'inline-flex', 'important');
+    }
+  } catch (e) { /* navigation privée stricte : bouton masqué */ }
+  document.getElementById('bk-request-btn').addEventListener('click', () => {
+    document.getElementById('bk-form-panel').dataset.method = 'offline';
   });
   document.getElementById('bk-form-submit').addEventListener('click', () => {
     const method = document.getElementById('bk-form-panel').dataset.method || 'offline';
