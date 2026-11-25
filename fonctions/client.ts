@@ -1,6 +1,7 @@
 // Fichier généré par scripts/bundle_functions.py — ne pas modifier
 import { SupabaseClient, createClient } from "npm:@supabase/supabase-js@2.45.4";
 import nodemailer from "npm:nodemailer@6.9.14";
+import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
 // ----- _shared/commun.ts -----
 // Outils communs aux fonctions serveur A.C.T.E.S
@@ -236,7 +237,7 @@ async function envoyer(m: Message): Promise<{ messageId: string }> {
     replyTo: m.replyTo || Deno.env.get("SMTP_REPLY_TO") || undefined,
     subject: m.subject || "(sans objet)",
     text: m.body || undefined,
-    html: m.htmlBody || (m.body ? "<div style=\"font:14px/1.5 Arial,Helvetica,sans-serif\">" + echapper(m.body).replace(/\n/g, "<br>") + "</div>" : undefined),
+    html: m.htmlBody || (m.body ? habiller(m.body, m.subject) : undefined),
     attachments: (m.attachments || []).map((a) => ({ filename: a.filename, content: a.content, encoding: "base64", contentType: a.mimeType })),
   });
   return { messageId: info.messageId };
@@ -244,6 +245,68 @@ async function envoyer(m: Message): Promise<{ messageId: string }> {
 
 function echapper(s: string) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+}
+/** Habillage des e-mails du logiciel (24/11/2026) : le texte des modèles est mis en page aux couleurs du Chalet Bellevue.
+ *  Titres en MAJUSCULES → intertitres, « Clé : valeur » → lignes d'information, adresse seule sur une ligne → bouton. */
+function habiller(texte: string, sujet?: string): string {
+  const VERT = "#1F3D2B", OR = "#B98D46", TERRA = "#C0693E", GRIS = "#6E7469", FOND = "#F4F0E8";
+  const SANS = "Helvetica,Arial,sans-serif", SERIF = "Georgia,'Times New Roman',serif";
+  const lien = (s: string) => echapper(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" style="color:' + TERRA + ';">$1</a>')
+    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g, (m) => m.includes("href") ? m : '<a href="mailto:' + m + '" style="color:' + TERRA + ';">' + m + "</a>");
+  const bouton = (url: string) => {
+    const lib = /\/sejour/.test(url) ? "Ouvrir mon espace séjour" : /helloasso|\/pay/.test(url) ? "Payer en ligne" : /livret/.test(url) ? "Ouvrir le livret d'accueil" : /avis|review|g\.page/.test(url) ? "Laisser un avis" : "Ouvrir le lien";
+    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 14px;"><tr><td style="background:' + TERRA + ';border-radius:8px;">'
+      + '<a href="' + echapper(url) + '" style="display:inline-block;padding:11px 22px;font:700 14px ' + SANS + ';color:#ffffff;text-decoration:none;">' + lib + " →</a></td></tr></table>"
+      + '<div style="font:12px ' + SANS + ';color:' + GRIS + ';margin:-6px 0 12px;word-break:break-all;">' + lien(url) + "</div>";
+  };
+  const blocs = String(texte || "").replace(/\r\n/g, "\n").trim().split(/\n\s*\n/);
+  let corps = "", premier = true;
+  for (const b of blocs) {
+    const lignes = b.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lignes.length) continue;
+    let html = "", dansEncadre = false;
+    for (const [i, l] of lignes.entries()) {
+      if (premier && i === 0 && /^(bonjour|madame|monsieur|cher|chère)/i.test(l)) {
+        html += '<div style="font:italic 20px ' + SERIF + ';color:' + VERT + ';margin:0 0 12px;">' + echapper(l) + "</div>"; continue;
+      }
+      const lettres = l.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      if (i === 0 && lignes.length > 1 && lettres.length >= 4 && l === l.toUpperCase() && !/^https?:/.test(l) && l.length < 60) {
+        html += '<div style="font:700 11px ' + SANS + ';letter-spacing:.12em;color:' + OR + ';margin:6px 0 8px;">' + echapper(l) + "</div>";
+        dansEncadre = true; continue;
+      }
+      if (/^https?:\/\/\S+$/.test(l)) { html += bouton(l); continue; }
+      const kv = /^([^:]{2,40}?)\s:\s(.+)$/.exec(l);
+      if (kv && !/^https?/.test(kv[1])) {
+        const code = /code/i.test(kv[1]);
+        html += '<div style="font:14px/1.7 ' + SANS + ';color:#23302A;"><span style="color:' + GRIS + ';">' + echapper(kv[1]) + " :</span> "
+          + (code ? '<span style="display:inline-block;font:700 16px Consolas,Menlo,monospace;letter-spacing:2px;background:#ffffff;border:1px dashed ' + OR + ';border-radius:6px;padding:2px 10px;color:' + VERT + ';">' + echapper(kv[2]) + "</span>"
+            : "<strong>" + lien(kv[2]) + "</strong>") + "</div>";
+        continue;
+      }
+      if (/^[•\-–] /.test(l)) { html += '<div style="font:14px/1.6 ' + SANS + ';color:#23302A;padding-left:14px;text-indent:-12px;"><span style="color:' + TERRA + ';">•</span> ' + lien(l.slice(2)) + "</div>"; continue; }
+      html += '<div style="font:15px/1.6 ' + SANS + ';color:#23302A;">' + lien(l) + "</div>";
+    }
+    const dernier = b === blocs[blocs.length - 1];
+    if (dernier && !dansEncadre && lignes.length <= 3 && !/https?:/.test(b)) {
+      corps += '<div style="font:italic 16px/1.6 ' + SERIF + ';color:' + VERT + ';margin:6px 0 18px;">' + lignes.map(echapper).join("<br>") + "</div>";
+    } else if (dansEncadre) {
+      corps += '<div style="background:' + FOND + ';border-left:3px solid ' + OR + ';border-radius:10px;padding:14px 18px;margin:0 0 18px;">' + html + "</div>";
+    } else {
+      corps += '<div style="margin:0 0 18px;">' + html + "</div>";
+    }
+    premier = false;
+  }
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + echapper(sujet || "Chalet Bellevue") + "</title></head>"
+    + '<body style="margin:0;padding:0;background:#EFEAE0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFEAE0;"><tr><td align="center" style="padding:24px 12px;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#FFFFFF;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06);">'
+    + '<tr><td style="background:' + VERT + ';padding:22px 28px;border-bottom:3px solid ' + OR + ';">'
+    + '<div style="font:700 22px ' + SERIF + ';color:#FFFFFF;letter-spacing:.5px;">Chalet Bellevue</div>'
+    + '<div style="font:700 10px ' + SANS + ';letter-spacing:.18em;color:' + OR + ';margin-top:4px;">A.C.T.E.S · BAGNÈRES-DE-LUCHON</div></td></tr>'
+    + '<tr><td style="padding:28px 28px 10px;">' + corps + "</td></tr>"
+    + '<tr><td style="background:' + FOND + ';padding:16px 28px;font:12px/1.6 ' + SANS + ';color:' + GRIS + ';">'
+    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon<br>"
+    + '<a href="https://www.chalet-bellevue.fr" style="color:' + GRIS + ';">www.chalet-bellevue.fr</a> · Une question ? Répondez simplement à cet e-mail.'
+    + "</td></tr></table></td></tr></table></body></html>";
 }
 
 // ----- _shared/helloasso.ts -----
@@ -340,10 +403,162 @@ async function verifierPaiements(sb: any, resaId: string, seulement?: string) {
   if (nouveaux.length && smtpConfigure()) {
     const dest = Deno.env.get("SMTP_USER");
     const tot = nouveaux.reduce((s, p) => s + p.montant, 0);
-    if (dest) await envoyer({ to: dest, subject: "Paiement en ligne reçu : " + eur(tot) + " — " + (r.groupe || r.contact || "réservation"),
-      body: "Bonjour,\n\nUn paiement en ligne (HelloAsso) de " + eur(tot) + " vient d'être reçu pour le séjour de " + (r.groupe || r.contact || "") + " du " + fd(r.debut) + " au " + fd(r.fin) + ".\nIl est déjà enregistré dans le logiciel (fiche de la réservation › Tarif & paiements).\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
+    if (dest) await envoyer({ to: dest, subject: (r.statut === "demande" ? "À VALIDER — " : "") + "Paiement en ligne reçu : " + eur(tot) + " — " + (r.groupe || r.contact || "réservation"),
+      body: "Bonjour,\n\nUn paiement en ligne (HelloAsso) de " + eur(tot) + " vient d'être reçu pour le séjour de " + (r.groupe || r.contact || "") + " du " + fd(r.debut) + " au " + fd(r.fin) + ".\nIl est déjà enregistré dans le logiciel (fiche de la réservation › Tarif & paiements).\n" + (r.statut === "demande" ? "\nATTENTION : c'est une réservation directe, encore au statut « Demande ». Validez-la sous 48 h (statut « Confirmée »), ou refusez-la et remboursez l'acompte dans HelloAsso › Paiements.\n" : "") + "\nLe logiciel A.C.T.E.S" }).catch(() => {});
   }
   return { enregistres: nouveaux };
+}
+
+// ----- Exemplaire signé en PDF (24/11/2026) -----
+// Mise en page soignée de chaque document signé en ligne (bibliothèque libre pdf-lib, gratuite).
+async function pdfExemplaire(d: any, r: any, v: any, ent: any): Promise<string> {
+  const doc = await PDFDocument.create();
+  const helv = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const serif = await doc.embedFont(StandardFonts.TimesRomanBold);
+  const ital = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const mono = await doc.embedFont(StandardFonts.Courier);
+  const VERT = rgb(0.122, 0.239, 0.169), OR = rgb(0.725, 0.553, 0.275), TERRA = rgb(0.753, 0.412, 0.243);
+  const GRIS = rgb(0.43, 0.45, 0.41), TXT = rgb(0.14, 0.19, 0.16), BEIGE = rgb(0.98, 0.965, 0.937), FILET = rgb(0.91, 0.89, 0.85);
+  const W = 595.28, H = 841.89, M = 56, LW = W - 2 * M, BAS = 64;
+  doc.setTitle(String(d.titre || "Document signé"));
+  doc.setAuthor(String(ent.nom || "A.C.T.E.S"));
+  doc.setSubject("Exemplaire signé électroniquement — " + (r.groupe || r.contact || ""));
+  const jeu = new Set(helv.getCharacterSet());
+  const net = (s: unknown) => String(s ?? "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/ | /g, " ")
+    .replace(/[☐☑☒]/g, "").replace(/→/g, "->").split("").filter((c) => c === "\n" || jeu.has(c.codePointAt(0)!)).join("");
+  const coupe = (txt: string, f: any, t: number, w: number) => {
+    const out: string[] = [];
+    for (const para of net(txt).split("\n")) {
+      let l = "";
+      for (const mot of para.split(/\s+/).filter(Boolean)) {
+        const essai = l ? l + " " + mot : mot;
+        if (f.widthOfTextAtSize(essai, t) <= w) l = essai; else { if (l) out.push(l); l = mot; }
+      }
+      out.push(l);
+    }
+    return out;
+  };
+  let page: any, y = 0;
+  const nouvellePage = (premiere = false) => {
+    page = doc.addPage([W, H]);
+    if (premiere) {
+      page.drawRectangle({ x: 0, y: H - 92, width: W, height: 92, color: VERT });
+      page.drawRectangle({ x: 0, y: H - 95, width: W, height: 3, color: OR });
+      page.drawText("A.C.T.E.S", { x: M, y: H - 46, size: 22, font: serif, color: rgb(1, 1, 1) });
+      page.drawText(net("CHALET BELLEVUE · BAGNÈRES-DE-LUCHON"), { x: M, y: H - 66, size: 8.5, font: bold, color: OR });
+      const e1 = net("Document signé électroniquement");
+      page.drawText(e1, { x: W - M - helv.widthOfTextAtSize(e1, 9), y: H - 46, size: 9, font: helv, color: rgb(0.85, 0.88, 0.85) });
+      const e2 = net("Exemplaire à conserver");
+      page.drawText(e2, { x: W - M - ital.widthOfTextAtSize(e2, 8.5), y: H - 60, size: 8.5, font: ital, color: OR });
+      y = H - 130;
+    } else {
+      page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: VERT });
+      page.drawText(net(d.titre), { x: M, y: H - 34, size: 8.5, font: bold, color: GRIS });
+      y = H - 58;
+    }
+  };
+  const place = (h: number) => { if (y - h < BAS) nouvellePage(); };
+  const ligne = (txt: string, o: { f?: any; t?: number; c?: any; x?: number; w?: number; inter?: number } = {}) => {
+    const f = o.f || helv, t = o.t || 10, x = o.x ?? M, w = o.w ?? LW, inter = o.inter ?? t * 1.45;
+    for (const l of coupe(txt, f, t, w)) { place(inter); page.drawText(l, { x, y: y - t, size: t, font: f, color: o.c || TXT }); y -= inter; }
+  };
+  nouvellePage(true);
+  // Titre
+  for (const l of coupe(d.titre, serif, 20, LW)) { page.drawText(l, { x: M, y: y - 20, size: 20, font: serif, color: VERT }); y -= 26; }
+  y -= 6;
+  // Encadré réservation
+  const infos: [string, string][] = [
+    ["Réservation", r.groupe || r.contact || ""],
+    ["Séjour", "du " + fd(r.debut) + " au " + fd(r.fin)],
+    ["Signataire", String(v.nom || "")],
+    ["Signé le", new Date(v.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }) + " (heure de Paris)"],
+  ];
+  const hBox = infos.length * 16 + 18;
+  page.drawRectangle({ x: M, y: y - hBox, width: LW, height: hBox, color: BEIGE, borderColor: FILET, borderWidth: 1 });
+  page.drawRectangle({ x: M, y: y - hBox, width: 3, height: hBox, color: OR });
+  let yi = y - 22;
+  for (const [k, val] of infos) {
+    page.drawText(net(k.toUpperCase()), { x: M + 16, y: yi, size: 7.5, font: bold, color: GRIS });
+    page.drawText(net(val).slice(0, 90), { x: M + 110, y: yi, size: 10, font: bold, color: TXT });
+    yi -= 16;
+  }
+  y -= hBox + 20;
+  // Corps du document
+  const blocs = String(v.texte || "").trim().split(/\n\s*\n/);
+  for (const b of blocs) {
+    const ls = b.split("\n").map((x) => x.trim()).filter(Boolean);
+    if (!ls.length) continue;
+    if (ls.length === 1 && ls[0].startsWith("## ")) {
+      place(40); y -= 8;
+      page.drawText(net(ls[0].slice(3)), { x: M, y: y - 12, size: 12, font: bold, color: VERT });
+      y -= 17; page.drawRectangle({ x: M, y, width: 28, height: 1.5, color: OR }); y -= 10;
+      continue;
+    }
+    if (ls.every((x) => x.startsWith("• ") || x.startsWith("- "))) {
+      for (const x of ls) {
+        const lignes = coupe(x.slice(2), helv, 10, LW - 16);
+        place(14.5);
+        page.drawCircle({ x: M + 4, y: y - 6.5, size: 1.8, color: TERRA });
+        for (const l of lignes) { place(14.5); page.drawText(l, { x: M + 14, y: y - 10, size: 10, font: helv, color: TXT }); y -= 14.5; }
+      }
+      y -= 6; continue;
+    }
+    for (const x of ls) ligne(x);
+    y -= 7;
+  }
+  // Champs complétés par le signataire
+  const champs = (d.champs || []).filter((c: any) => v.champs && v.champs[c.id]);
+  if (champs.length || v.attestation) {
+    place(40); y -= 6;
+    page.drawText(net("Informations complétées par le signataire"), { x: M, y: y - 12, size: 12, font: bold, color: VERT });
+    y -= 17; page.drawRectangle({ x: M, y, width: 28, height: 1.5, color: OR }); y -= 12;
+    for (const c of champs) {
+      ligne(c.lib, { f: bold, t: 8.5, c: GRIS, inter: 12 });
+      ligne(String(v.champs[c.id]), { t: 10.5, inter: 17 });
+    }
+    if (v.attestation) {
+      const lignes = coupe(v.attestation, helv, 10, LW - 22);
+      place(lignes.length * 14.5 + 6);
+      page.drawRectangle({ x: M, y: y - 11, width: 10, height: 10, borderColor: VERT, borderWidth: 1.2 });
+      page.drawLine({ start: { x: M + 2, y: y - 6 }, end: { x: M + 4.5, y: y - 9 }, thickness: 1.6, color: VERT });
+      page.drawLine({ start: { x: M + 4.5, y: y - 9 }, end: { x: M + 8.5, y: y - 2.5 }, thickness: 1.6, color: VERT });
+      for (const l of lignes) { page.drawText(l, { x: M + 18, y: y - 10, size: 10, font: helv, color: TXT }); y -= 14.5; }
+      y -= 4;
+    }
+  }
+  // Bloc signature
+  const engagement = coupe(d.case || "", bold, 10, LW - 28);
+  const preuves = [
+    "Signé électroniquement par " + (v.nom || "") + " le " + new Date(v.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }) + " (heure de Paris),",
+    v.acces || "après identification par un code à usage unique envoyé à " + (r.email || "") + ".",
+    "Adresse IP : " + (v.ip || "—"),
+  ];
+  const lp = preuves.flatMap((p) => coupe(p, helv, 8.5, LW - 28));
+  const em = coupe("Empreinte SHA-256 du texte signé : " + (v.version || ""), mono, 7, LW - 28);
+  const hs = 26 + engagement.length * 14 + 8 + lp.length * 12 + em.length * 10 + 14;
+  place(hs + 14); y -= 10;
+  page.drawRectangle({ x: M, y: y - hs, width: LW, height: hs, color: rgb(1, 1, 1), borderColor: OR, borderWidth: 1.2 });
+  page.drawText("SIGNATURE", { x: M + 14, y: y - 18, size: 7.5, font: bold, color: OR });
+  let ys = y - 34;
+  for (const l of engagement) { page.drawText(l, { x: M + 14, y: ys, size: 10, font: bold, color: VERT }); ys -= 14; }
+  ys -= 6;
+  for (const l of lp) { page.drawText(l, { x: M + 14, y: ys, size: 8.5, font: helv, color: GRIS }); ys -= 12; }
+  for (const l of em) { page.drawText(l, { x: M + 14, y: ys, size: 7, font: mono, color: GRIS }); ys -= 10; }
+  y -= hs;
+  // Pied de page sur chaque page
+  const pages = doc.getPages();
+  const pied = net((ent.nom || "A.C.T.E.S") + " — association loi 1901 · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon" + (ent.email ? " · " + ent.email : ""));
+  pages.forEach((p: any, i: number) => {
+    p.drawRectangle({ x: M, y: 44, width: LW, height: 0.6, color: FILET });
+    p.drawText(pied.slice(0, 130), { x: M, y: 30, size: 7, font: helv, color: GRIS });
+    const n = "Page " + (i + 1) + " / " + pages.length;
+    p.drawText(n, { x: W - M - helv.widthOfTextAtSize(n, 7), y: 30, size: 7, font: helv, color: GRIS });
+  });
+  const octets = await doc.save();
+  let bin = "";
+  for (let i = 0; i < octets.length; i += 0x8000) bin += String.fromCharCode(...octets.subarray(i, i + 0x8000));
+  return btoa(bin);
 }
 
 // ----- client/index.ts -----
@@ -483,16 +698,15 @@ L'utilisateur peut signer la présente convention, le principe locatif et la con
   {
     id: "securite", titre: "Convention de mise à disposition — Sécurité",
     case: "Je reconnais avoir été informé(e) des dispositions de sécurité de cette convention et je m'engage à les appliquer et à les faire appliquer par mon groupe.",
+    attestation: "J'atteste sur l'honneur que mon groupe est couvert par une assurance responsabilité civile (extension villégiature) pour toute la durée du séjour, et je m'engage à fournir l'attestation à l'association sur simple demande.",
     champs: [
-      { id: "assureur", lib: "Assureur (assurance extension villégiature)" },
-      { id: "police", lib: "N° de contrat d'assurance" },
       { id: "evacuation", lib: "Personne désignée pour vérifier l'évacuation (nom et prénom)" },
     ],
     texte: `Cette convention règle la sécurité pendant l'utilisation du Chalet Bellevue, 2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagnères-de-Luchon. Elle est obligatoire pour valider la réservation et se signe au moment de la réservation, en ligne dans l'espace séjour ou sur papier en la renvoyant signée par e-mail. La personne qui la signe est appelée « l'organisateur ».
 
 ## I — Avant l'utilisation des locaux
 
-L'organisateur déclare avoir souscrit une assurance (extension villégiature), dont il indique l'assureur et le numéro de contrat. Il s'engage à :
+L'organisateur atteste sur l'honneur avoir souscrit une assurance (extension villégiature) couvrant le séjour, et s'engage à présenter l'attestation à A.C.T.E.S. sur simple demande. Il s'engage également à :
 
 • prendre connaissance des consignes générales de sécurité et des consignes particulières affichées dans le chalet, et les appliquer ;
 • visiter le chalet avec le représentant d'A.C.T.E.S. à la remise des clés, en particulier les locaux et les accès qui seront utilisés ;
@@ -555,12 +769,13 @@ function htmlExemplaire(d: any, r: any, v: any) {
   }).join("");
   const ch = v.champs ? "<p>" + d.champs.map((c: any) => e(c.lib) + " : <b>" + e(v.champs[c.id]) + "</b>").join("<br>") + "</p>" : "";
   return "<html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.4}h1{font-size:16pt}h3{font-size:12pt;margin:14px 0 4px}.sig{border:1px solid #999;padding:10px;margin-top:18px}</style></head><body>"
-    + "<h1>" + e(d.titre) + "</h1><p><b>Réservation :</b> " + e(r.groupe || r.contact) + " — séjour du " + fd(r.debut) + " au " + fd(r.fin) + "</p>" + corps + ch
+    + "<h1>" + e(d.titre) + "</h1><p><b>Réservation :</b> " + e(r.groupe || r.contact) + " — séjour du " + fd(r.debut) + " au " + fd(r.fin) + "</p>" + corps + ch + (v.attestation ? "<p>☑ <b>Attestation sur l'honneur :</b> " + e(v.attestation) + "</p>" : "")
     + "<div class='sig'><p>" + e(d.case) + "</p><p><b>Signé électroniquement par " + e(v.nom) + "</b> le " + e(new Date(v.le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }))
     + " (heure de Paris), après identification par un code envoyé à " + e(r.email) + ".<br>Adresse IP : " + e(v.ip || "—") + "<br>Empreinte SHA-256 du texte signé : " + e(v.version) + "</p></div></body></html>";
 }
 /** Nom du dossier Drive du client : nom du groupe, sinon nom de famille du contact, en majuscules. */
-const dossierClient = (r: any) => (String(r.groupe || "").trim() || String(r.contact || "").trim().split(/\s+/).pop() || "SANS NOM")
+const frDate = (iso: unknown) => { const x = String(iso || ""); return /^\d{4}-\d{2}-\d{2}/.test(x) ? x.slice(8, 10) + "-" + x.slice(5, 7) + "-" + x.slice(0, 4) : x; };
+const dossierClient = (r: any) => (String(r.groupe || "").trim() || String(r.contact || "").trim() || "SANS NOM")
   .toUpperCase().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const masquerEmail = (e: string) => String(e || "").replace(/^(.)[^@]*(@.*)$/, "$1•••$2");
 
@@ -572,9 +787,10 @@ async function siDocsComplets(sb: any, r: any, s: Record<string, any>) {
   const dest = Deno.env.get("SMTP_USER");
   if (!dest) return;
   const lignes = DOCS_RESA.map((d) => "• " + d.titre + " : " + (s[d.id].mode === "email" ? "reçu signé par e-mail (enregistré par " + (s[d.id].par || "l'équipe") + ")" : "signé en ligne par " + s[d.id].nom) + " le " + new Date(s[d.id].le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }));
+  const af: any = r.adhesionFiche; if (af) lignes.push("• Adhésion " + (af.type === "renouvellement" ? "(renouvellement)" : "(nouvel adhérent)") + " : " + [af.civilite, af.prenom, af.nom].filter(Boolean).join(" ") + (af.email ? " — " + af.email : "") + (af.tel ? " — " + af.tel : ""));
   await envoyer({ to: dest, subject: "Documents signés : " + (r.groupe || r.contact || "réservation") + " (" + fd(r.debut) + ")",
     body: "Bonjour,\n\nLes trois documents de la réservation de " + (r.groupe || r.contact || "") + " du " + fd(r.debut) + " au " + fd(r.fin) + " sont signés :\n\n" + lignes.join("\n")
-      + (s.securite && s.securite.champs ? "\n\nAssurance : " + (s.securite.champs.assureur || "") + " — contrat n° " + (s.securite.champs.police || "") + "\nPersonne désignée pour l'évacuation : " + (s.securite.champs.evacuation || "") : "")
+      + (s.securite && s.securite.champs ? "\n\nAssurance : " + (s.securite.champs.assureur ? s.securite.champs.assureur + " — contrat n° " + (s.securite.champs.police || "") : "attestée sur l'honneur (attestation à demander si besoin)") + "\nPersonne désignée pour l'évacuation : " + (s.securite.champs.evacuation || "") : "")
       + "\n\nLa réservation peut être validée."
       + "\n\nDépôt des documents : " + (await lienDepot("r-" + r.id)) + "\n\nLe logiciel A.C.T.E.S" }).catch(() => {});
 }
@@ -598,7 +814,29 @@ async function agent(sb: any, b: any, cfg: any, ent: any): Promise<Response> {
       if (docs.some((d) => d.statut !== "signe")) liste.push({ id: String(r.id), email: String(r.email || "").toLowerCase(), contact: r.contact || "", groupe: r.groupe || "", debut: r.debut, fin: r.fin, annee, dossier, docs });
       for (const d of DOCS_RESA) {
         const v = brut[d.id];
-        if (v && v.mode === "electronique" && v.texte && !v.driveId) exemplaires.push({ cle: String(r.id) + ":" + d.id, annee, dossier, nom: d.titre + " - signé en ligne par " + t(v.nom, 60) + " le " + String(v.le).slice(0, 10), html: htmlExemplaire(d, r, v) });
+        if (v && v.mode === "electronique" && v.texte && !v.driveId && exemplaires.length < 30) {
+          const num = { principe: "2", utilisation: "3", securite: "4" }[d.id as "principe"] || "9";
+          const court = { principe: "Principe locatif", utilisation: "Convention d'utilisation", securite: "Convention sécurité" }[d.id as "principe"] || d.titre;
+          let pdf = "";
+          try { pdf = await pdfExemplaire(d, r, v, ent); } catch (e) { console.error("pdf agent", String(e)); }
+          exemplaires.push({ cle: String(r.id) + ":" + d.id, annee, dossier, nom: num + " - " + court + " - signé le " + frDate(v.le), pdf, html: pdf ? "" : htmlExemplaire(d, r, v) });
+        }
+      }
+      // Bulletin d'adhésion rempli en ligne : rangé avec les documents du séjour.
+      const fa = r.adhesionFiche;
+      if (fa && fa.le && !fa.driveId && exemplaires.length < 30) {
+        try {
+          const oui = (x: unknown) => (x ? "oui" : "non");
+          const dAdh = { titre: "Bulletin d'adhésion A.C.T.E.S — " + (fa.type === "renouvellement" ? "renouvellement" : "première adhésion"), case: "Bulletin rempli et signé en ligne par l'adhérent, qui a accepté les engagements de l'adhérent.",
+            champs: [["civilite", "Civilité"], ["nom", "Nom"], ["prenom", "Prénom"], ["naissanceFr", "Date de naissance"], ["adresseComplete", "Adresse"], ["tel", "Téléphone"], ["email", "E-mail"], ["structure", "Structure / groupe"], ["source", "Comment nous avez-vous connus ?"], ["animal", "Animal"], ["droitImageTxt", "Droit à l'image"], ["infosEmailTxt", "Recevoir les informations par e-mail"], ["cotisationTxt", "Cotisation annuelle"]].map(([id, lib]) => ({ id, lib })) };
+          const vals = { ...fa, naissanceFr: fa.naissance ? frDate(fa.naissance) : "", adresseComplete: [fa.adresse, [fa.cp, fa.ville].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+            droitImageTxt: oui(fa.droitImage), infosEmailTxt: oui(fa.infosEmail), cotisationTxt: fa.cotisation ? fa.cotisation + " € (année " + (fa.annee || "") + ")" : "" };
+          const sig = fa.signature || {};
+          const vAdh = { nom: sig.nom || (fa.prenom + " " + fa.nom), le: sig.le || fa.le, ip: sig.ip || "", version: sig.version || "", texte: "", champs: vals,
+            acces: "depuis son espace séjour personnel (lien privé envoyé à " + (r.email || fa.email || "") + ")." };
+          const pdf = await pdfExemplaire(dAdh, r, vAdh, ent);
+          exemplaires.push({ cle: String(r.id) + ":adhesion", annee, dossier, nom: "1 - Bulletin d'adhésion - " + (fa.prenom || "") + " " + (fa.nom || "") + " - " + frDate(fa.le), pdf, html: "" });
+        } catch (e) { console.error("pdf adhésion", String(e)); }
       }
     }
     return json({ resas: liste, exemplaires: exemplaires.slice(0, 30), cleIA: await sha256("agent-ia:" + (Deno.env.get("SITE_SECRET") || "")) });
@@ -606,8 +844,12 @@ async function agent(sb: any, b: any, cfg: any, ent: any): Promise<Response> {
   if (b.action === "agent-ranges") {
     let n = 0;
     for (const f of (Array.isArray(b.faits) ? b.faits : []).slice(0, 60)) {
-      const m = /^([\w-]{1,80}):(principe|utilisation|securite)$/.exec(String(f && f.cle || ""));
+      const m = /^([\w-]{1,80}):(principe|utilisation|securite|adhesion)$/.exec(String(f && f.cle || ""));
       const r = m && resas.find((x) => String(x.id) === m[1]);
+      if (m && r && m[2] === "adhesion") {
+        if (r.adhesionFiche && /^[\w-]{10,}$/.test(String(f.driveId || ""))) { await fusionDoc(sb, "crm_actes_resas", r.id, { adhesionFiche: { ...r.adhesionFiche, driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } }); n++; }
+        continue;
+      }
       if (!r || !r.documentsSignes || !r.documentsSignes[m[2]] || !/^[\w-]{10,}$/.test(String(f.driveId || ""))) continue;
       await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } } });
       r.documentsSignes = { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId) } };
@@ -696,12 +938,12 @@ Deno.serve(async (req) => {
       acces: ea.acces,
       chalet: cfg.nomChalet, ville: cfg.ville, asso: ent.nom || "A.C.T.E.S", tel: cfg.telAsso || ent.tel || "", email: ent.email || "",
       groupe: r.groupe || "", contact: r.contact || "", debut: r.debut, fin: r.fin, nuits: nbN(r.debut, r.fin), personnes: pers(r),
-      statut: r.statut, total: total(r), paye: paye(r), reste: Math.max(0, reste(r)), detail: r.detailTarif || [],
+      statut: r.statut, paiementDirect: !!r.paiementDirect, total: total(r), paye: paye(r), reste: Math.max(0, reste(r)), detail: r.detailTarif || [],
       echeancier: e.map((x: any) => ({ type: x.type, lib: x.lib, montant: x.montant, du: x.du, etat: x.etat, reste: x.reste })),
       caution: num((r.caution || {}).montant) || num(cfg.caution),
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
       // Les trois documents obligatoires pour valider la réservation, et leur état de signature
-      documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, texte: texteDoc(d, cfg),
+      documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, attestation: (d as any).attestation || "", texte: texteDoc(d, cfg),
         signe: s[d.id] ? { mode: s[d.id].mode, nom: s[d.id].nom || "", le: s[d.id].le } : null,
         verification: !s[d.id] && r.documentsSignes && r.documentsSignes[d.id] && r.documentsSignes[d.id].statut === "a_verifier" ? { le: r.documentsSignes[d.id].le } : null })); })(),
       signature: { email: masquerEmail(r.email || ""), codeEnvoye: !!(r.signatureCode && r.signatureCode.empreinte && Date.parse(r.signatureCode.expire || "") > Date.now()), possible: !!(r.email && smtpConfigure()) },
@@ -902,7 +1144,7 @@ Deno.serve(async (req) => {
       });
       if (smtpConfigure()) {
         const dest = Deno.env.get("SMTP_USER");
-        if (dest) await envoyer({ to: dest, subject: (renouv ? "Renouvellement d'adhésion en ligne : " : "Nouvelle adhésion en ligne : ") + fiche.prenom + " " + fiche.nom,
+        if (dest && false) await envoyer({ to: dest, subject: (renouv ? "Renouvellement d'adhésion en ligne : " : "Nouvelle adhésion en ligne : ") + fiche.prenom + " " + fiche.nom,
           body: "Bonjour,\n\n" + fiche.civilite + " " + fiche.prenom + " " + fiche.nom + " vient de remplir son bulletin " + (renouv ? "de renouvellement d'adhésion" : "d'adhésion") + " en ligne pour le séjour du " + fd(r.debut) + " au " + fd(r.fin) + ".\n\n"
             + "Adresse : " + fiche.adresse + ", " + fiche.cp + " " + fiche.ville + "\nTéléphone : " + fiche.tel + "\nE-mail : " + fiche.email + (fiche.structure ? "\nStructure : " + fiche.structure : "")
             + "\nDroit à l'image : " + (fiche.droitImage ? "autorisé" : "refusé") + "\nInformations par e-mail : " + (fiche.infosEmail ? "oui" : "non")
@@ -946,28 +1188,34 @@ Deno.serve(async (req) => {
       if (b.accepte !== true) return erreur("Merci de cocher la case d'acceptation des documents.");
       const champs: Record<string, string> = {};
       for (const d of aSigner) for (const ch of d.champs) {
-        champs[ch.id] = t((b.champs || {})[ch.id], 120);
+        champs[ch.id] = t((b.champs || {})[ch.id], 120) || (ch.id === "evacuation" ? t(r.contact, 120) : "");
         if (champs[ch.id].length < 2) return erreur("Merci de compléter : " + ch.lib.toLowerCase() + ".");
       }
+      if (aSigner.some((d: any) => d.attestation) && b.attestationAssurance !== true) return erreur("Merci de cocher l'attestation sur l'honneur d'assurance.");
       const le = new Date().toISOString(), ip = t(b.ip, 60), ua = t(b.ua, 200);
       const ns = { ...(r.documentsSignes || {}) };
       const exemplaires: { filename: string; content: string; mimeType: string }[] = [];
       for (const d of aSigner) {
         const texte = texteDoc(d, cfg);
         const ch = d.champs.length ? Object.fromEntries(d.champs.map((x) => [x.id, champs[x.id]])) : null;
-        const rec = { mode: "electronique", statut: "valide", nom, le, ip, ua, identification: "code à usage unique envoyé à " + r.email, version: await sha256(texte), texte, ...(ch ? { champs: ch } : {}) };
+        const rec = { mode: "electronique", statut: "valide", nom, le, ip, ua, identification: "code à usage unique envoyé à " + r.email, version: await sha256(texte), texte, ...(ch ? { champs: ch } : {}), ...((d as any).attestation ? { attestation: (d as any).attestation } : {}) };
         ns[d.id] = rec;
         const preuve = d.titre + "\n\nRéservation : " + (r.groupe || r.contact || "") + " — séjour du " + fd(r.debut) + " au " + fd(r.fin) + "\n\n" + texte.replace(/^## /gm, "").replace(/^• /gm, "- ")
           + (ch ? "\n\n" + d.champs.map((x) => x.lib + " : " + ch[x.id]).join("\n") : "")
+          + ((d as any).attestation ? "\n\n[x] " + (d as any).attestation : "")
           + "\n\n----------\n" + d.case + "\nSigné électroniquement par " + nom + " le " + new Date(le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
           + " (heure de Paris), après identification par un code envoyé à " + r.email + ".\nAdresse IP : " + (ip || "—") + "\nEmpreinte SHA-256 du texte signé : " + rec.version + "\n";
-        exemplaires.push({ filename: d.titre.replace(/[^\wÀ-ÿ' -]+/g, " ").replace(/\s+/g, " ").trim() + " - signé.txt", content: btoa(String.fromCharCode(...new TextEncoder().encode(preuve))), mimeType: "text/plain; charset=utf-8" });
+        let pdf = "";
+        try { pdf = await pdfExemplaire(d, r, rec, ent); } catch (e) { console.error("pdf exemplaire", String(e)); }
+        const nomFichier = d.titre.replace(/[^\wÀ-ÿ' -]+/g, " ").replace(/\s+/g, " ").trim() + " - signé";
+        exemplaires.push(pdf ? { filename: nomFichier + ".pdf", content: pdf, mimeType: "application/pdf" }
+          : { filename: nomFichier + ".txt", content: btoa(String.fromCharCode(...new TextEncoder().encode(preuve))), mimeType: "text/plain; charset=utf-8" });
       }
       await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, signatureCode: null,
         ...(aSigner.some((d) => d.id === "utilisation") && !r.contratAccepte ? { contratAccepte: { le, nom, ip, ua, version: ns.utilisation.version } } : {}) });
       // Un exemplaire des documents signés pour le signataire (support durable) ; copie au bureau.
       if (smtpConfigure()) {
-        await envoyer({ to: r.email, cc: Deno.env.get("SMTP_USER") || undefined, subject: "Vos documents signés — séjour du " + fd(r.debut) + " au " + fd(r.fin),
+        await envoyer({ to: r.email, subject: "Vos documents signés — séjour du " + fd(r.debut) + " au " + fd(r.fin),
           body: "Bonjour " + (r.contact || "") + ",\n\nVous avez signé en ligne, le " + new Date(le).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }) + " :\n" + aSigner.map((d) => "• " + d.titre).join("\n")
             + "\n\nVous trouverez en pièces jointes un exemplaire de chaque document signé, à conserver.\n\nBien cordialement,\n" + (ent.nom || "A.C.T.E.S"),
           attachments: exemplaires }).catch((e) => console.error("exemplaire signé", String(e)));

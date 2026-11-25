@@ -1911,7 +1911,7 @@ function sectionDocuments(d, base, codeEnvoye) {
       const champs = [].concat(...reste.map((x) => x.champs || []));
       h += `<form method="post" action="${base}/signer-tout" class="dform">
 <label for="sg-code">Code re\xE7u par e-mail${sig.email ? " (" + esc(sig.email) + ")" : ""}</label><input type="text" id="sg-code" name="code" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="max-width:160px;letter-spacing:4px;font-size:20px">
-${champs.some((c) => /assur/i.test(c.lib || "")) ? AIDE_ASSUR : ""}${champs.map((c) => `<label for="sg-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="sg-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120">`).join("")}
+${reste.filter((x) => x.attestation).map((x) => AIDE_ASSUR + `<label class="coche"><input type="checkbox" name="assurance" required> ${esc(x.attestation)}</label>`).join("")}${champs.map((c) => `<label for="sg-${esc(c.id)}">${esc(c.lib)}</label><input type="text" id="sg-${esc(c.id)}" name="ch_${esc(c.id)}" required minlength="2" maxlength="120" value="${c.id === "evacuation" ? esc(d.contact || "") : ""}">`).join("")}
 <label for="sg-nom">Signature : tapez votre pr\xE9nom et votre nom</label><input type="text" id="sg-nom" name="nom" required minlength="3" maxlength="120" autocomplete="name">
 <label class="coche"><input type="checkbox" name="accepte" required> J'ai lu ${reste.map((x) => "\xAB\xA0" + esc(x.titre) + "\xA0\xBB").join(", ").replace(/, ([^,]*)$/, " et $1")}, et je ${reste.length > 1 ? "les " : "l'"}accepte au nom de mon groupe. Je reconnais que cette signature \xE9lectronique m'engage comme une signature manuscrite.</label>
 <div class="btns"><button class="btn btn-v" type="submit">Signer ${reste.length > 1 ? "les " + reste.length + " documents" : "le document"}</button></div>
@@ -1931,7 +1931,7 @@ function pageDocument(d, id) {
 <div class="np btns" style="margin-bottom:14px"><button class="btn btn-v" onclick="window.print()">Imprimer</button></div>
 <div class="imp"><h1>${esc(x.titre)}</h1>
 <p><b>R\xE9servation :</b> ${esc(d.groupe || d.contact)} \xB7 du ${esc(fdc(d.debut))} au ${esc(fdc(d.fin))} \xB7 ${d.personnes} personnes</p>
-${docHtml(x.texte)}${champs}
+${docHtml(x.texte)}${champs}${x.attestation ? `<p>☐ ${esc(x.attestation)}</p>` : ""}
 <h3>Signature</h3><p>${esc(x.case)}</p>
 <p>Fait \xE0 ______________________, le ___ / ___ / ______</p>
 <p>Nom, pr\xE9nom et signature, pr\xE9c\xE9d\xE9s de \xAB Lu et approuv\xE9 \xBB :</p><div style="height:90px"></div></div>`);
@@ -1949,7 +1949,7 @@ function vueSejour(d, jeton, msg) {
 <div><div class="k">D\xE9part</div><div class="v">${esc(fd(d.fin))}</div></div>
 <div><div class="k">Dur\xE9e</div><div class="v">${d.nuits} nuit${d.nuits > 1 ? "s" : ""}</div></div>
 <div><div class="k">Personnes</div><div class="v">${d.personnes}</div></div></div>
-${d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
+${d.statut === "demande" && d.paiementDirect ? `<p class="msg m-info" style="margin:16px 0 0"><b>Réservation directe :</b> remplissez votre bulletin d'adhésion, signez les documents puis réglez l'acompte en ligne ci-dessous. Vos dates sont réservées pour vous ; l'association valide votre séjour sous 48 h après le paiement. Si elle ne peut pas le valider, l'acompte vous est intégralement remboursé.</p>` : d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
   // Accès selon l'adhésion (décidé par le serveur) : "bulletin" → formulaire obligatoire avant tout le reste ;
   // "limite" → cotisation pas encore réglée : suivi de la réservation et règlement seulement ; "complet" → tout l'espace.
   const acces = d.acces || "complet";
@@ -1985,7 +1985,7 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
     }
     h += `</section>`;
   }
-  if (d.reste > 0 && d.statut !== "demande") {
+  if (d.reste > 0 && (d.statut !== "demande" || d.paiementDirect)) {
     h += `<section class="carte" id="paiement"><h2>Paiement</h2>`;
     if (!d.paiementEnLigne) {
       h += `<p>Le r\xE8glement se fait par virement ou par ch\xE8que \xE0 l'ordre de A.C.T.E.S., selon les indications de l'association. Les ch\xE8ques doivent \xEAtre re\xE7us au plus tard un mois avant le d\xE9but du s\xE9jour.</p>`;
@@ -2128,7 +2128,7 @@ async function routeEquipe(request, env, url) {
   return pageDepot(r2.data, k, f, msg);
 }
 
-var AIDE_ASSUR = '<div style="background:#f3efe6;border-left:4px solid #b98d46;border-radius:8px;padding:10px 14px;margin:14px 0 4px;font-size:14px;line-height:1.5"><b>Quelle assurance indiquer ?</b><br>Celle de votre <b>logement principal (assurance multirisque habitation)</b>. La plupart de ces contrats incluent une garantie <b>« villégiature »</b> qui couvre les dégâts que vous pourriez causer dans un logement loué pour les vacances (responsabilité civile locative). En cas de doute, demandez à votre assureur une attestation « villégiature » pour les dates du séjour.<br><b>Assureur</b> : le nom de votre compagnie (ex. MAIF, AXA, Groupama…).<br><b>N° de contrat</b> : il figure sur votre attestation ou votre avis d’échéance d’assurance habitation.</div>';
+var AIDE_ASSUR = '<p style="font-size:13px;line-height:1.5;margin:14px 0 4px;color:#555"><b>Assurance :</b> celle de votre logement principal (multirisque habitation) convient en général, la plupart incluent la garantie « villégiature ». En cas de doute, demandez une attestation à votre assureur.</p>';
 async function routeSejour(request, env, url) {
   if (url.pathname === "/sejour/paiement-recu") {
     const idDp = url.searchParams.get("d") || "", rateDp = url.searchParams.get("a") || url.searchParams.get("e");
@@ -2183,7 +2183,7 @@ async function routeSejour(request, env, url) {
     if (action === "signer-tout") {
       const champs = {};
       for (const [k2, v] of f.entries()) if (k2.startsWith("ch_")) champs[k2.slice(3)] = String(v);
-      const r2 = await appel(env, "POST", null, { action: "signer-tout", jeton, code: String(f.get("code") || ""), nom: String(f.get("nom") || ""), accepte: !!f.get("accepte"), champs, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
+      const r2 = await appel(env, "POST", null, { action: "signer-tout", jeton, code: String(f.get("code") || ""), nom: String(f.get("nom") || ""), accepte: !!f.get("accepte"), attestationAssurance: !!f.get("assurance"), champs, ip: request.headers.get("cf-connecting-ip") || "", ua: request.headers.get("user-agent") || "" });
       if (r2.status === 200) return redirige("/sejour/" + jeton + "?ok=signe#documents");
       return redirige("/sejour/" + jeton + "?code=envoye&err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "La signature n'a pas pu \xEAtre enregistr\xE9e.").slice(0, 220)) + "#signature");
     }
@@ -2870,6 +2870,19 @@ var worker_default = {
         return reponseJson({ error: "Ces dates ne sont plus disponibles \u2014 merci de choisir une autre p\xE9riode." }, 409);
       }
       const res = await env.API.fetch(request);
+      if (res.status === 201 && body && body.paymentMethod === "online") {
+        // Réservation directe (24/11/2026) : la demande est créée tout de suite dans le logiciel et le client part dans son espace séjour
+        // (bulletin d'adhésion, signature, paiement de l'acompte). En cas d'échec, l'envoi habituel ci-dessous prend le relais.
+        try {
+          const j = await res.clone().json();
+          const id = j && j.reservation && j.reservation.id;
+          const ligne = id && env.DB ? await env.DB.prepare("SELECT * FROM reservations WHERE id = ?").bind(id).first() : null;
+          const rep = ligne ? await versLogiciel(env, versDemande(ligne)) : null;
+          if (rep && /^[a-f0-9]{24,64}$/.test(rep.jeton || "")) return reponseJson({ ...j, sejour: "/sejour/" + rep.jeton }, 201, res.headers);
+        } catch (e) {
+          console.error("réservation directe : espace séjour non créé", String(e));
+        }
+      }
       if (res.status === 201 && body) {
         const copie = res.clone();
         ctx.waitUntil((async () => {

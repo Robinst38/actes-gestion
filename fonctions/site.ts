@@ -236,7 +236,7 @@ async function envoyer(m: Message): Promise<{ messageId: string }> {
     replyTo: m.replyTo || Deno.env.get("SMTP_REPLY_TO") || undefined,
     subject: m.subject || "(sans objet)",
     text: m.body || undefined,
-    html: m.htmlBody || (m.body ? "<div style=\"font:14px/1.5 Arial,Helvetica,sans-serif\">" + echapper(m.body).replace(/\n/g, "<br>") + "</div>" : undefined),
+    html: m.htmlBody || (m.body ? habiller(m.body, m.subject) : undefined),
     attachments: (m.attachments || []).map((a) => ({ filename: a.filename, content: a.content, encoding: "base64", contentType: a.mimeType })),
   });
   return { messageId: info.messageId };
@@ -244,6 +244,68 @@ async function envoyer(m: Message): Promise<{ messageId: string }> {
 
 function echapper(s: string) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+}
+/** Habillage des e-mails du logiciel (24/11/2026) : le texte des modèles est mis en page aux couleurs du Chalet Bellevue.
+ *  Titres en MAJUSCULES → intertitres, « Clé : valeur » → lignes d'information, adresse seule sur une ligne → bouton. */
+function habiller(texte: string, sujet?: string): string {
+  const VERT = "#1F3D2B", OR = "#B98D46", TERRA = "#C0693E", GRIS = "#6E7469", FOND = "#F4F0E8";
+  const SANS = "Helvetica,Arial,sans-serif", SERIF = "Georgia,'Times New Roman',serif";
+  const lien = (s: string) => echapper(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" style="color:' + TERRA + ';">$1</a>')
+    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g, (m) => m.includes("href") ? m : '<a href="mailto:' + m + '" style="color:' + TERRA + ';">' + m + "</a>");
+  const bouton = (url: string) => {
+    const lib = /\/sejour/.test(url) ? "Ouvrir mon espace séjour" : /helloasso|\/pay/.test(url) ? "Payer en ligne" : /livret/.test(url) ? "Ouvrir le livret d'accueil" : /avis|review|g\.page/.test(url) ? "Laisser un avis" : "Ouvrir le lien";
+    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 14px;"><tr><td style="background:' + TERRA + ';border-radius:8px;">'
+      + '<a href="' + echapper(url) + '" style="display:inline-block;padding:11px 22px;font:700 14px ' + SANS + ';color:#ffffff;text-decoration:none;">' + lib + " →</a></td></tr></table>"
+      + '<div style="font:12px ' + SANS + ';color:' + GRIS + ';margin:-6px 0 12px;word-break:break-all;">' + lien(url) + "</div>";
+  };
+  const blocs = String(texte || "").replace(/\r\n/g, "\n").trim().split(/\n\s*\n/);
+  let corps = "", premier = true;
+  for (const b of blocs) {
+    const lignes = b.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lignes.length) continue;
+    let html = "", dansEncadre = false;
+    for (const [i, l] of lignes.entries()) {
+      if (premier && i === 0 && /^(bonjour|madame|monsieur|cher|chère)/i.test(l)) {
+        html += '<div style="font:italic 20px ' + SERIF + ';color:' + VERT + ';margin:0 0 12px;">' + echapper(l) + "</div>"; continue;
+      }
+      const lettres = l.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      if (i === 0 && lignes.length > 1 && lettres.length >= 4 && l === l.toUpperCase() && !/^https?:/.test(l) && l.length < 60) {
+        html += '<div style="font:700 11px ' + SANS + ';letter-spacing:.12em;color:' + OR + ';margin:6px 0 8px;">' + echapper(l) + "</div>";
+        dansEncadre = true; continue;
+      }
+      if (/^https?:\/\/\S+$/.test(l)) { html += bouton(l); continue; }
+      const kv = /^([^:]{2,40}?)\s:\s(.+)$/.exec(l);
+      if (kv && !/^https?/.test(kv[1])) {
+        const code = /code/i.test(kv[1]);
+        html += '<div style="font:14px/1.7 ' + SANS + ';color:#23302A;"><span style="color:' + GRIS + ';">' + echapper(kv[1]) + " :</span> "
+          + (code ? '<span style="display:inline-block;font:700 16px Consolas,Menlo,monospace;letter-spacing:2px;background:#ffffff;border:1px dashed ' + OR + ';border-radius:6px;padding:2px 10px;color:' + VERT + ';">' + echapper(kv[2]) + "</span>"
+            : "<strong>" + lien(kv[2]) + "</strong>") + "</div>";
+        continue;
+      }
+      if (/^[•\-–] /.test(l)) { html += '<div style="font:14px/1.6 ' + SANS + ';color:#23302A;padding-left:14px;text-indent:-12px;"><span style="color:' + TERRA + ';">•</span> ' + lien(l.slice(2)) + "</div>"; continue; }
+      html += '<div style="font:15px/1.6 ' + SANS + ';color:#23302A;">' + lien(l) + "</div>";
+    }
+    const dernier = b === blocs[blocs.length - 1];
+    if (dernier && !dansEncadre && lignes.length <= 3 && !/https?:/.test(b)) {
+      corps += '<div style="font:italic 16px/1.6 ' + SERIF + ';color:' + VERT + ';margin:6px 0 18px;">' + lignes.map(echapper).join("<br>") + "</div>";
+    } else if (dansEncadre) {
+      corps += '<div style="background:' + FOND + ';border-left:3px solid ' + OR + ';border-radius:10px;padding:14px 18px;margin:0 0 18px;">' + html + "</div>";
+    } else {
+      corps += '<div style="margin:0 0 18px;">' + html + "</div>";
+    }
+    premier = false;
+  }
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + echapper(sujet || "Chalet Bellevue") + "</title></head>"
+    + '<body style="margin:0;padding:0;background:#EFEAE0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFEAE0;"><tr><td align="center" style="padding:24px 12px;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#FFFFFF;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06);">'
+    + '<tr><td style="background:' + VERT + ';padding:22px 28px;border-bottom:3px solid ' + OR + ';">'
+    + '<div style="font:700 22px ' + SERIF + ';color:#FFFFFF;letter-spacing:.5px;">Chalet Bellevue</div>'
+    + '<div style="font:700 10px ' + SANS + ';letter-spacing:.18em;color:' + OR + ';margin-top:4px;">A.C.T.E.S · BAGNÈRES-DE-LUCHON</div></td></tr>'
+    + '<tr><td style="padding:28px 28px 10px;">' + corps + "</td></tr>"
+    + '<tr><td style="background:' + FOND + ';padding:16px 28px;font:12px/1.6 ' + SANS + ';color:' + GRIS + ';">'
+    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon<br>"
+    + '<a href="https://www.chalet-bellevue.fr" style="color:' + GRIS + ';">www.chalet-bellevue.fr</a> · Une question ? Répondez simplement à cet e-mail.'
+    + "</td></tr></table></td></tr></table></body></html>";
 }
 
 
@@ -544,7 +606,7 @@ Deno.serve(async (req) => {
       "Demande reçue depuis le site internet" + (b.siteId ? " (n° " + b.siteId + ")" : "") + ".",
       montant > 0 ? "Montant calculé par le site : " + montant.toFixed(2).replace(".", ",") + " € (location, ménage, adhésion et taxe de séjour compris)." : "",
       b.message ? "Message : " + String(b.message).slice(0, 2000) : "",
-      "Paiement souhaité : " + (b.paymentMethod === "online" ? "en ligne" : "hors ligne") + ".",
+      b.paymentMethod === "online" ? "RÉSERVATION DIRECTE : le client règle l'acompte en ligne avant la validation par le bureau (à valider sous 48 h, ou à refuser en remboursant l'acompte dans HelloAsso)." : "Paiement souhaité : hors ligne.",
     ].filter(Boolean).join("\n");
     await ecrireDoc(sb, "crm_actes_resas", id, {
       id, creeLe: auj(), canal: "Site web", statut, ...(statut === "confirmee" ? { confirmeLe: auj() } : {}),
@@ -552,7 +614,7 @@ Deno.serve(async (req) => {
       debut: String(b.checkIn).slice(0, 10), fin: String(b.checkOut).slice(0, 10),
       adultes: String(adultes), enfants: String(enfants), personnes: String(adultes + enfants),
       options: { menage: !!b.wantsCleaning }, tarif: montant > 0 ? String(montant) : "", paiements: [], notes, siteId: b.siteId ? String(b.siteId) : null,
-      jeton: nouveauJeton(), codeAcces: nouveauCode(), ...(detail.length ? { detailTarif: detail } : {}), ...(num(b.acompte) > 0 ? { acompteFixe: r2(num(b.acompte)) } : {}),
+      paiementDirect: b.paymentMethod === "online", jeton: nouveauJeton(), codeAcces: nouveauCode(), ...(detail.length ? { detailTarif: detail } : {}), ...(num(b.acompte) > 0 ? { acompteFixe: r2(num(b.acompte)) } : {}),
     });
     // Accusé de réception avec le code d'accès à l'espace séjour (si activé dans Automatisations)
     try {
@@ -569,7 +631,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("accusé de réception non envoyé", String(e));
     }
-    return json({ ok: true, id }, 201);
+    return json({ ok: true, id, ...(b.paymentMethod === "online" ? { jeton: ((await lireDoc(sb, "crm_actes_resas", id)) || {}).jeton || "" } : {}) }, 201);
   }
   return erreur("Méthode non prise en charge.", 405);
 });
