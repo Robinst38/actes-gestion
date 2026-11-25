@@ -1835,7 +1835,7 @@ function sectionAdhesion(d, base) {
   const a = d.adhesion || {}, cot = a.cotisation || 30;
   if (a.fiche) {
     const quoi = a.fiche.type === "renouvellement" ? "Renouvellement d'adh\xE9sion enregistr\xE9" : "Bulletin d'adh\xE9sion enregistr\xE9";
-    const etatCot = a.payee ? `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-ok">R\xE9gl\xE9e</span></p>` : `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-av">\xC0 r\xE9gler</span> — elle est comprise dans l'acompte de votre r\xE9servation.</p>`;
+    const etatCot = a.payee ? `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-ok">R\xE9gl\xE9e</span></p>` : `<p class="k" style="margin:10px 0 0">Cotisation ${eur(a.montant || cot)} : <span class="badge b-av">\xC0 r\xE9gler</span> — elle est comprise dans les arrhes de votre r\xE9servation.</p>`;
     return `<section class="carte" id="adhesion"><h2>Adh\xE9sion \xE0 l'association</h2><p class="msg m-ok" style="margin:0">✓ ${quoi} le ${esc(new Date(a.fiche.le).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long" }))} pour ${esc(a.fiche.prenom + " " + a.fiche.nom)}.${a.fiche.type === "renouvellement" ? " Merci de votre fid\xE9lit\xE9 !" : " Bienvenue dans l'association !"}</p>${etatCot}</section>`;
   }
   const P = a.type === "renouvellement" && a.precedente ? a.precedente : null;
@@ -1949,7 +1949,7 @@ function vueSejour(d, jeton, msg) {
 <div><div class="k">D\xE9part</div><div class="v">${esc(fd(d.fin))}</div></div>
 <div><div class="k">Dur\xE9e</div><div class="v">${d.nuits} nuit${d.nuits > 1 ? "s" : ""}</div></div>
 <div><div class="k">Personnes</div><div class="v">${d.personnes}</div></div></div>
-${d.plateforme ? `<p class="msg m-info" style="margin:16px 0 0">S\xE9jour r\xE9serv\xE9 et pay\xE9 sur <b>${esc(d.plateforme)}</b>. Il vous reste \xE0 <b>signer les 3 documents ci-dessous avant votre arriv\xE9e</b>.</p>` : ""}${d.statut === "demande" && d.paiementDirect ? `<p class="msg m-info" style="margin:16px 0 0"><b>Réservation directe :</b> remplissez votre bulletin d'adhésion, signez les documents puis réglez l'acompte en ligne ci-dessous. Vos dates sont réservées pour vous ; l'association valide votre séjour sous 48 h après le paiement. Si elle ne peut pas le valider, l'acompte vous est intégralement remboursé.</p>` : d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
+${d.plateforme ? `<p class="msg m-info" style="margin:16px 0 0">S\xE9jour r\xE9serv\xE9 et pay\xE9 sur <b>${esc(d.plateforme)}</b>. Il vous reste \xE0 <b>signer les 3 documents ci-dessous avant votre arriv\xE9e</b>.</p>` : ""}${d.statut === "demande" && d.paiementDirect ? `<p class="msg m-info" style="margin:16px 0 0"><b>Réservation directe :</b> remplissez votre bulletin d'adhésion, signez les documents puis réglez les arrhes en ligne ci-dessous. Vos dates sont réservées pour vous ; l'association valide votre séjour sous 48 h après le paiement. Si elle ne peut pas le valider, les arrhes vous sont intégralement remboursées.</p>` : d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
   // Accès selon l'adhésion (décidé par le serveur) : "bulletin" → formulaire obligatoire avant tout le reste ;
   // "limite" → cotisation pas encore réglée : suivi de la réservation et règlement seulement ; "complet" → tout l'espace.
   const acces = d.acces || "complet";
@@ -1993,7 +1993,7 @@ ${d.caution ? `<tr><td>Caution<div class="k">Remise \xE0 l'arriv\xE9e, restitu\x
       h += `<p>Le paiement en ligne sera disponible d\xE8s que les documents ci-dessus seront sign\xE9s.</p>`;
     } else {
       h += `<p>Paiement s\xE9curis\xE9 par carte bancaire avec <b>HelloAsso</b>, la plateforme de paiement des associations. Vous pouvez aussi r\xE9gler par ch\xE8que \xE0 l'ordre de A.C.T.E.S., \xE0 recevoir au plus tard un mois avant le d\xE9but du s\xE9jour, ou par virement.</p><div class="btns">`;
-      if (acompte && acompte.reste > 0) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="acompte"><button class="btn btn-p" type="submit">Payer l'acompte : ${eur(acompte.reste)}</button></form>`;
+      if (acompte && acompte.reste > 0) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="acompte"><button class="btn btn-p" type="submit">Payer les arrhes : ${eur(acompte.reste)}</button></form>`;
       if (d.reste > 0 && (!acompte || acompte.reste <= 0 || solde && d.reste > acompte.reste)) h += `<form method="post" action="${base}/payer"><input type="hidden" name="type" value="solde"><button class="btn ${acompte && acompte.reste > 0 ? "btn-v" : "btn-p"}" type="submit">${acompte && acompte.reste > 0 ? "Tout r\xE9gler" : "Payer le solde"} : ${eur(d.reste)}</button></form>`;
       h += `</div><p class="k" style="margin-top:10px">HelloAsso est gratuit pour l'association ; une contribution volontaire au fonctionnement de HelloAsso peut vous \xEAtre propos\xE9e, vous pouvez la mettre \xE0 0 \u20AC.</p>`;
     }
@@ -2388,7 +2388,7 @@ function connaissances(k) {
   }
   if (k.menage) l.push(`Forfait m\xE9nage de fin de s\xE9jour : ${eur2(k.menage)}.`);
   if (k.adhesion) l.push(`Adh\xE9sion \xE0 l'association, ajout\xE9e \xE0 chaque s\xE9jour : ${eur2(k.adhesion)}.`);
-  if (k.acomptePct) l.push(`Acompte \xE0 la r\xE9servation : ${k.acomptePct} % ; solde ${k.soldeJours || 30} jours avant l'arriv\xE9e.`);
+  if (k.acomptePct) l.push(`Arrhes \xE0 la r\xE9servation : ${k.acomptePct} % ; solde ${k.soldeJours || 30} jours avant l'arriv\xE9e.`);
   if (k.caution) l.push(`Caution : ${eur2(k.caution)}, restitu\xE9e apr\xE8s l'\xE9tat des lieux.`);
   if (k.taxe) {
     if (k.taxe.pct) l.push(`Taxe de s\xE9jour (pour la commune) : ${k.taxe.pct} % du prix par personne et par nuit, plafonn\xE9e \xE0 ${eur2(k.taxe.plafond || 0)}${k.taxe.majoration ? `, major\xE9e de ${k.taxe.majoration} % (taxes additionnelles)` : ""}, adultes seulement (mineurs exon\xE9r\xE9s).`);
