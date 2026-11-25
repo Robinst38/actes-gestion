@@ -23,24 +23,24 @@
     if (r.payment_stage === 'full') return '<span class="badge badge-paid">Tout payé</span>';
     const canPay = onlinePayment && r.status === 'confirmed';
     if (r.payment_stage === 'deposit') {
-      let h = '<span class="badge badge-deposit">Acompte payé</span>';
+      let h = '<span class="badge badge-deposit">Arrhes payées</span>';
       if (canPay && Number(r.balance_amount) > 0) h += payButton(r, 'balance', 'Payer le solde en ligne', r.balance_amount);
       return h;
     }
     let html = '<span class="badge badge-pending">À payer</span>';
-    if (canPay) html += payButton(r, 'deposit', "Payer l'acompte en ligne", r.deposit_amount);
+    if (canPay) html += payButton(r, 'deposit', "Payer les arrhes en ligne", r.deposit_amount);
     return html;
   }
 
   const PAYMENT_MESSAGES = {
     ok: ['Merci ! Votre paiement est bien enregistré.', false],
     rien: ['Il n\'y a rien à régler pour le moment.', false],
-    'acompte-d-abord': ['Réglez d\'abord l\'acompte : le solde pourra être payé ensuite.', true],
+    'acompte-d-abord': ['Réglez d\'abord les arrhes : le solde pourra être payé ensuite.', true],
     attente: ['Paiement en cours de confirmation : votre espace sera mis à jour dans quelques minutes.', false],
     annule: ['Paiement annulé : vous pouvez réessayer quand vous le souhaitez.', true],
     erreur: ['Le paiement n\'a pas abouti. Vous pouvez réessayer, ou régler par chèque, espèces ou virement.', true],
     'non-validee': ['Votre réservation doit d\'abord être validée par l\'association avant le paiement.', true],
-    'deja-payee': ['Cet acompte est déjà réglé.', false],
+    'deja-payee': ['Ces arrhes sont déjà réglées.', false],
   };
 
   function showPaymentReturn() {

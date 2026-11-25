@@ -271,7 +271,7 @@
     'pay-none': { payment: 'none' },
   };
 
-  // Suivi des paiements : 3 états (À payer / Acompte payé / Tout payé), calculés
+  // Suivi des paiements : 3 états (À payer / Arrhes payées / Tout payé), calculés
   // à partir des factures acompte + solde de la réservation.
   function payStage(r) {
     if (r.status === 'cancelled') return 'cancelled';
@@ -281,11 +281,11 @@
     if (r.deposit_status === 'paid') return 'deposit';
     return 'none';
   }
-  const PAY_LABELS = { none: 'À payer', deposit: 'Acompte payé', full: 'Tout payé', cancelled: 'Annulée' };
+  const PAY_LABELS = { none: 'À payer', deposit: 'Arrhes payées', full: 'Tout payé', cancelled: 'Annulée' };
   const PAY_BADGES = { none: 'badge-pending', deposit: 'badge-deposit', full: 'badge-paid', cancelled: 'badge-cancelled' };
   function eur(n) { return Number(n || 0).toFixed(2).replace('.', ',') + ' €'; }
   function payInfo(r, st) {
-    if (st === 'none' && r.deposit_amount != null) return 'Acompte : ' + eur(r.deposit_amount);
+    if (st === 'none' && r.deposit_amount != null) return 'Arrhes : ' + eur(r.deposit_amount);
     if (st === 'deposit') {
       return 'Reste ' + eur(r.balance_amount) + (r.balance_due ? ' avant le ' + fmtDateFR(r.balance_due) : '');
     }
@@ -295,7 +295,7 @@
     if (st === 'cancelled' || currentIsBureau) return '';
     const id = r.id;
     let h = '';
-    if (st === 'none') h += `<button class="btn-sm primary" data-action="pay-deposit" data-id="${id}">Acompte payé</button> `;
+    if (st === 'none') h += `<button class="btn-sm primary" data-action="pay-deposit" data-id="${id}">Arrhes payées</button> `;
     if (st !== 'full') h += `<button class="btn-sm primary" data-action="pay-full" data-id="${id}">Tout payé</button> `;
     if (st !== 'none') h += `<button class="btn-sm" data-action="pay-none" data-id="${id}">Annuler le paiement</button>`;
     return h;

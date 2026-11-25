@@ -356,7 +356,7 @@ function updateSummary() {
     ${state.wantsCleaning ? `<div class="price-line"><span>Ménage de fin de séjour</span><span>${price.cleaning}${cur}</span></div>` : ''}
     <div class="price-line"><span>Adhésion A.C.T.E.S (obligatoire, 100% à la réservation)</span><span>${price.membership}${cur}</span></div>
     <div class="price-line total"><span>Sous-total location + adhésion</span><span>${price.total}${cur}</span></div>
-    <div class="price-line deposit"><span>À régler maintenant — acompte (${RATE_CONFIG.depositPercent}% de la location) + adhésion</span><span>${price.deposit}${cur}</span></div>
+    <div class="price-line deposit"><span>À régler maintenant — arrhes (${RATE_CONFIG.depositPercent}% de la location) + adhésion</span><span>${price.deposit}${cur}</span></div>
     <div class="price-line"><span>Solde location (1 mois avant le séjour)</span><span>${price.balance}${cur}</span></div>
     <div class="price-line"><span>Taxe de séjour (${price.taxableAdults} adulte${price.taxableAdults > 1 ? 's' : ''} × ${price.nights} nuit${price.nights > 1 ? 's' : ''})</span><span>${price.taxeSejour.toFixed(2)}${cur}</span></div>
     <div class="price-line total"><span>Total du séjour</span><span>${price.grandTotal.toFixed(2)}${cur}</span></div>
@@ -438,7 +438,7 @@ async function submitRequest(method) {
     if (titleEl) titleEl.textContent = 'Vos dates sont réservées pour vous !';
     document.getElementById('bk-confirm-text').innerHTML =
       `<p>Séjour du ${stay}.</p>` +
-      `<p>Vous allez être redirigé vers votre <strong>espace séjour</strong> pour remplir votre bulletin d'adhésion, signer les documents et régler l'acompte en ligne.</p>` +
+      `<p>Vous allez être redirigé vers votre <strong>espace séjour</strong> pour remplir votre bulletin d'adhésion, signer les documents et régler les arrhes en ligne.</p>` +
       `<p><a class="btn btn-primary" href="${sejour}">Ouvrir mon espace séjour</a></p>`;
     setTimeout(() => { location.href = sejour; }, 2500);
     return;
@@ -447,8 +447,8 @@ async function submitRequest(method) {
     if (iconEl) { iconEl.textContent = '✓'; iconEl.classList.remove('is-error'); }
     if (titleEl) titleEl.textContent = 'Merci, votre demande est bien envoyée !';
     const step2 = method === 'online'
-      ? `Le bureau vous recontacte pour organiser le règlement de l'acompte.`
-      : `Le bureau vous recontacte pour organiser le règlement de l'acompte et de l'adhésion annuelle.`;
+      ? `Le bureau vous recontacte pour organiser le règlement des arrhes.`
+      : `Le bureau vous recontacte pour organiser le règlement des arrhes et de l'adhésion annuelle.`;
     document.getElementById('bk-confirm-text').innerHTML =
       `<p>Séjour du ${stay}, transmis à l'association.</p>` +
       `<p><strong>La suite :</strong></p>` +
@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (q === 'off') sessionStorage.setItem('bkDirect', '0');
     if (sessionStorage.getItem('bkDirect') !== '0') {
       const b = document.getElementById('bk-pay-online-btn');
-      b.textContent = "Réserver et payer l'acompte en ligne";
+      b.textContent = "Réserver et payer les arrhes en ligne";
       b.style.setProperty('display', 'inline-flex', 'important');
     }
   } catch (e) { /* navigation privée stricte : bouton masqué */ }
