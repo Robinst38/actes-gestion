@@ -431,6 +431,57 @@ Deno.serve(async (req) => {
       recap = true;
     }
   }
+  // Bilan mensuel du bureau (25/11/2026) : le 1er de chaque mois, une seule fois, à l'adresse du récapitulatif
+  let bilan = false;
+  try {
+    if (auto.recap && cfg.recapEmail && t.slice(8, 10) === "01") {
+      const idB = "bilan_" + t.slice(0, 7);
+      if (!(await lireDoc(sb, "chalet_sync", idB))) {
+        const finB = t;
+        const dB = new Date(t + "T12:00:00Z"); dB.setUTCMonth(dB.getUTCMonth() - 1);
+        const debB = dB.toISOString().slice(0, 10);
+        const nbJ = nbN(debB, finB);
+        const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+        const libM = MOIS[dB.getUTCMonth()] + " " + dB.getUTCFullYear();
+        const platsB = (await lireCollection(sb, "actes_plateformes")).filter((p: any) => p.arrivee && !/annul/i.test(p.statut || ""));
+        const sejB: { debut: string; fin: string }[] = [
+          ...resas.filter((r: any) => r.statut === "confirmee" && r.debut && r.fin).map((r: any) => ({ debut: r.debut, fin: r.fin })),
+          ...platsB.map((p: any) => ({ debut: p.arrivee, fin: p.depart })),
+        ];
+        let nuitsB = 0, nbSB = 0;
+        for (const s of sejB) {
+          const a = s.debut > debB ? s.debut : debB, b = s.fin < finB ? s.fin : finB;
+          const n = nbN(a, b);
+          if (n > 0) { nuitsB += n; nbSB++; }
+        }
+        let encB = 0;
+        for (const r of resas) for (const p of paiementsDe(r)) if (p.date && p.date >= debB && p.date < finB) encB += num(p.montant);
+        const fin60 = addD(t, 60);
+        const avenirB = resas
+          .filter((r: any) => actif(r) && r.debut && r.debut >= t && r.debut <= fin60)
+          .sort((a: any, b: any) => (a.debut < b.debut ? -1 : 1))
+          .map((r: any) => `${fd(r.debut)} → ${fd(r.fin)} · ${r.groupe || r.contact}${pers(r) ? " · " + pers(r) + " pers." : ""}${r.statut === "demande" ? " (demande)" : r.statut === "option" ? " (option)" : ""}`);
+        const retardsB: string[] = [];
+        for (const r of resas) if (actif(r)) for (const e of echeancier(r, cfg)) if (e.etat === "retard") retardsB.push(`${r.groupe || r.contact} — ${e.lib} : ${eur(e.reste)}`);
+        const lignesB: [string, string[]][] = [
+          ["Mois écoulé (" + libM + ")", [
+            `Taux de remplissage : ${nbJ ? Math.round((nuitsB * 100) / nbJ) : 0} % (${nuitsB} nuit(s) occupée(s) sur ${nbJ})`,
+            `Séjours (confirmés et plateformes) : ${nbSB}`,
+            `Encaissé sur le mois : ${eur(r2(encB))}`,
+          ]],
+          ["Réservations des 60 prochains jours", avenirB.length ? avenirB : ["Aucune"]],
+          ["Paiements en retard", retardsB.length ? retardsB : ["Aucun"]],
+        ];
+        const htmlB = `<div style="font:14px/1.5 Arial,sans-serif;color:#23302A"><h2 style="color:#1F3D2B;font-family:Georgia,serif">${echapper(cfg.nomChalet)} — bilan de ${echapper(libM)}</h2>` +
+          lignesB.map(([ti, l]) => `<h3 style="margin:16px 0 4px;color:#C0693E">${echapper(ti)}</h3><ul>${l.map((x) => "<li>" + echapper(x) + "</li>").join("")}</ul>`).join("") + "</div>";
+        if (!essai) {
+          await envoyer({ to: cfg.recapEmail, subject: `${cfg.nomChalet} — bilan de ${libM}`, htmlBody: htmlB, body: lignesB.map(([a, l]) => a + "\n" + l.map((x) => "• " + x).join("\n")).join("\n\n") });
+          await ecrireDoc(sb, "chalet_sync", idB, { date: new Date().toISOString() });
+        }
+        bilan = true;
+      }
+    }
+  } catch (e) { erreurs.push({ resa: "Bilan mensuel", type: "bilan", erreur: e instanceof Error ? e.message : String(e) }); }
   if (!essai) await ecrireDoc(sb, "chalet_sync", "emails", { date: new Date().toISOString(), envoyes: faits, erreurs, recap });
-  return json({ ok: true, essai, envoyes: faits, erreurs, recap, menage });
+  return json({ ok: true, essai, envoyes: faits, erreurs, recap, menage, bilan });
 });
