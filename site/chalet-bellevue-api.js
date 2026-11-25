@@ -440,7 +440,7 @@ function emailReservationHtml(d) {
       '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Adresse</strong><br>2 Impasse du Poujaou, Domaine Bellevue, 31110 Bagn\u00e8res-de-Luchon<br>' +
       '<a href="https://www.google.com/maps/search/?api=1&query=2+Impasse+du+Poujaou+31110+Bagneres-de-Luchon" style="color:#c0693e;">Ouvrir dans Google Maps</a></p>' +
       '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Horaires</strong><br>Arriv\u00e9e \u00e0 partir de 16h \u00b7 D\u00e9part avant 10h</p>' +
-      '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Linge de lit</strong> (en option)<br>tarif communiqu\u00e9 par le bureau</p>' +
+      '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Linge de lit</strong> (en option)<br>lit 90 : 8 \u20ac \u00b7 lit 140 : 10 \u20ac</p>' +
       '<p style="margin:0;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Une question ?</strong><br><a href="mailto:contact@chalet-bellevue.fr" style="color:#c0693e;">contact@chalet-bellevue.fr</a></p>') +
     '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">\u00c0 tr\u00e8s bient\u00f4t \u00e0 Luchon,<br>L\'\u00e9quipe de l\'association A.C.T.E.S</p>';
   return emLayout({ title: 'Votre demande est bien re\u00e7ue', preheader: 'S\u00e9jour du ' + emDate(d.checkIn) + ' au ' + emDate(d.checkOut), body: body });
