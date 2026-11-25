@@ -3,7 +3,7 @@
  *
  * Chaque dimanche vers 3 h, une copie complète des données du logiciel
  * (réservations, clients, factures, trésorerie, réglages, accès…) est déposée
- * dans le dossier Drive « Sauvegardes A.C.T.E.S ». Les 12 dernières sont gardées.
+ * dans le dossier Drive « Sauvegardes Logiciel de gestion A.C.T.E.S ». Les 12 dernières sont gardées.
  *
  * Mise en route (une seule fois) : choisir la fonction « installer » puis ▶ Exécuter,
  * et accepter les autorisations demandées par Google.
@@ -28,8 +28,8 @@
  * Mise en route (une seule fois) : fichier appsscript.json fourni (service avancé Drive), puis « installerAgent » ▶ Exécuter.
  */
 const URL_SAUVEGARDE = 'https://qmggmwdfzsacjpykvjvf.supabase.co/functions/v1/sauvegarde';
-const CLE_SAUVEGARDE = 'COLLER_ICI_LA_CLE';   // même valeur que le secret BACKUP_SECRET dans Supabase
-const NOM_DOSSIER = 'Sauvegardes A.C.T.E.S';
+const CLE_SAUVEGARDE = 'd7c6c1356ef90b5045650451c186a734206b0483eacf23af';   // même valeur que le secret BACKUP_SECRET dans Supabase
+const NOM_DOSSIER = 'Sauvegardes Logiciel de gestion A.C.T.E.S'; // ancien nom : « Sauvegardes A.C.T.E.S » (renommé automatiquement)
 const NOMBRE_A_GARDER = 12;
 
 function sauvegarder() {
@@ -63,7 +63,12 @@ function installer() {
 
 function dossierSauvegardes_() {
   const it = DriveApp.getFoldersByName(NOM_DOSSIER);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(NOM_DOSSIER);
+  if (it.hasNext()) return it.next();
+  // Renommage du 23/11/2026 : l'ancien dossier « Sauvegardes A.C.T.E.S » est repris et renommé,
+  // pour le distinguer de « Sauvegardes Site chalet-bellevue.fr » (voir Sauvegarde site.gs).
+  const ancien = DriveApp.getFoldersByName('Sauvegardes A.C.T.E.S');
+  if (ancien.hasNext()) { const d = ancien.next(); d.setName(NOM_DOSSIER); return d; }
+  return DriveApp.createFolder(NOM_DOSSIER);
 }
 
 function nettoyer_(dossier) {
@@ -202,6 +207,8 @@ function traiterMessage_(m, donnees) {
   });
   if (!pj.length) return '';
   const de = emailDe_(m.getFrom()), objet = m.getSubject() || '';
+  // Ignore les e-mails envoyés par l'association elle-même (copies, notifications) : évite les boucles « À trier ».
+  if (/^(contact|no-reply|noreply)@chalet-bellevue\.fr$/i.test(String(de).trim())) return '';
   let resa = (donnees.resas || []).filter(function (r) { return r.email && r.email === de; })[0];
   const reconnu = !!resa;
   if (!resa) resa = (donnees.resas || []).filter(function (r) { return r.groupe && norm_(objet).indexOf(norm_(r.groupe)) >= 0; })[0];
@@ -216,7 +223,7 @@ function traiterMessage_(m, donnees) {
   const date = Utilities.formatDate(m.getDate(), 'Europe/Paris', 'yyyy-MM-dd');
   const fichiers = [], textes = [], vignettes = [];
   pj.forEach(function (a) {
-    const f = dossier.createFile(a.copyBlob()).setName(date + ' – ' + a.getName());
+    const f = dossier.createFile(a.copyBlob()).setName('5 - Reçu par e-mail le ' + date.split('-').reverse().join('-') + ' - ' + a.getName());
     fichiers.push({ nom: f.getName(), driveId: f.getId(), driveUrl: f.getUrl(), pdf: a.getContentType() === 'application/pdf' });
     textes.push(texteOCR_(f));
   });
@@ -352,8 +359,11 @@ function rangerExemplaires_(liste) {
       const dossier = sousDossier_(sousDossier_(DriveApp.getFolderById(DOSSIER_RESERVATIONS_ID), 'RESERVATION ' + x.annee), x.dossier);
       const nom = String(x.nom).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 150);
       let blob;
-      try { blob = Utilities.newBlob(x.html, 'text/html', 'exemplaire.html').getAs('application/pdf').setName(nom + '.pdf'); }
-      catch (e) { blob = Utilities.newBlob(x.html, 'text/html', nom + '.html'); }
+      if (x.pdf) blob = Utilities.newBlob(Utilities.base64Decode(x.pdf), 'application/pdf', nom + '.pdf'); // PDF mis en page par le logiciel (24/11/2026)
+      else {
+        try { blob = Utilities.newBlob(x.html, 'text/html', 'exemplaire.html').getAs('application/pdf').setName(nom + '.pdf'); }
+        catch (e) { blob = Utilities.newBlob(x.html, 'text/html', nom + '.html'); }
+      }
       const f = dossier.createFile(blob);
       faits.push({ cle: x.cle, driveId: f.getId(), driveUrl: f.getUrl() });
     } catch (e) { console.error('Exemplaire ' + x.cle + ' : ' + e); }
