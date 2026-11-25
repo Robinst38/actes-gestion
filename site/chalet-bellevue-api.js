@@ -429,11 +429,11 @@ function emailReservationHtml(d) {
     
     emLabel('Ce que vous aurez \u00e0 r\u00e9gler') +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 6px;">' +
-    step('#c0693e', '\u00e0 la validation de votre demande', 'Acompte + adh\u00e9sion', '', 'montant indiqu\u00e9 \u00e0 la validation') +
+    step('#c0693e', '\u00e0 la validation de votre demande', 'Arrhes + adh\u00e9sion', '', 'montant indiqu\u00e9 \u00e0 la validation') +
     step('#b98d46', balanceWhen, 'Solde de la location', '', 'montant indiqu\u00e9 \u00e0 la validation') +
     '</table>' +
     '<p style="margin:0 0 24px;font:400 13px ' + EM_SANS + ';color:#6f6a60;">R\u00e8glement en ligne par carte bancaire (lien dans l\'e-mail de confirmation), par ch\u00e8que, en esp\u00e8ces ou par virement.</p>' +
-    emLabel('Votre espace s\u00e9jour') + emBox('<p style="margin:0 0 8px;">Vous allez recevoir un second e-mail avec le <strong>lien et le code d\u2019acc\u00e8s \u00e0 votre espace s\u00e9jour</strong> : vous y suivez votre demande, signez vos documents et r\u00e9glez en ligne.</p>' + '<p style="margin:0;font-size:13px;color:#6f6a60;">Votre espace adh\u00e9rent A.C.T.E.S sera ouvert une fois la r\u00e9servation valid\u00e9e et l\u2019acompte r\u00e9gl\u00e9 : vos identifiants vous seront alors envoy\u00e9s par e-mail.</p>') +
+    emLabel('Votre espace s\u00e9jour') + emBox('<p style="margin:0 0 8px;">Vous allez recevoir un second e-mail avec le <strong>lien et le code d\u2019acc\u00e8s \u00e0 votre espace s\u00e9jour</strong> : vous y suivez votre demande, signez vos documents et r\u00e9glez en ligne.</p>' + '<p style="margin:0;font-size:13px;color:#6f6a60;">Votre espace adh\u00e9rent A.C.T.E.S sera ouvert une fois la r\u00e9servation valid\u00e9e et les arrhes r\u00e9gl\u00e9es : vos identifiants vous seront alors envoy\u00e9s par e-mail.</p>') +
     (d.message ? emLabel('Votre message') + '<p style="margin:0 0 24px;padding:12px 16px;background:#faf6ef;border-radius:10px;font:italic 14px/1.5 ' + EM_SERIF + ';color:#4a463e;">' + emEsc(d.message).replace(/\n/g, '<br>') + '</p>' : '') +
     emLabel('Infos pratiques') +
     emBox(
@@ -466,7 +466,7 @@ function emailAdminNewHtml(d) {
       p.cleaning ? emRow('M\u00e9nage', emEur(p.cleaning)) : '',
       emRow('Adh\u00e9sion', emEur(p.membership)),
       emRow('Total du s\u00e9jour', emEur(p.total), { bold: true, top: true }),
-      emRow('Acompte + adh\u00e9sion d\u00fb maintenant', emEur(p.deposit), { bold: true }),
+      emRow('Arrhes + adh\u00e9sion dues maintenant', emEur(p.deposit), { bold: true }),
       emRow('Solde (1 mois avant l\'arriv\u00e9e)', emEur(p.balance)),
       emRow('Taxe de s\u00e9jour (sur place)', emEur(p.taxeSejour), { muted: true })
     ]) + '<div style="height:20px;"></div>' +
@@ -657,7 +657,7 @@ const CHAT_FACTS = [
   'Couchages : 6 chambres, 23 lits (22 simples et 1 double). Ch.1 : 3 lits superpos\u00e9s (6 places). Ch.2 : 3 lits superpos\u00e9s (6 places). Ch.3 : 2 lits superpos\u00e9s (4 places). Ch.4 : 2 lits superpos\u00e9s + 2 lits 90 cm (6 places). Ch.5 : 2 lits 90 cm (2 places). Ch.6 : 1 lit 140 cm (2 places).',
   'Espaces : salle \u00e0 manger de 45 m2, salon de 25 m2, jardin clos de 1500 m2, terrasse, barbecue, salon de jardin, parking priv\u00e9 (8 voitures).',
   '\u00c9quipements : cuisine \u00e9quip\u00e9e (2 r\u00e9frig\u00e9rateurs + 1 cong\u00e9lateur, gazini\u00e8re 5 feux et four gaz, lave-vaisselle, micro-ondes, 3 appareils \u00e0 raclette, 2 cafeti\u00e8res, bouilloire, grille-pain), 2 salles d\'eau avec 4 douches individuelles, 5 lavabos, 3 WC ind\u00e9pendants, s\u00e8che-cheveux, t\u00e9l\u00e9vision, WiFi gratuit, chauffage au gaz, lave-linge et s\u00e8che-linge privatifs, mat\u00e9riel de repassage.',
-  'Conditions : arriv\u00e9e \u00e0 partir de 16h, d\u00e9part avant 10h. Les montants (acompte, solde, linge, m\u00e9nage, adh\u00e9sion) ne sont pas communiqu\u00e9s pour le moment : orienter vers le bureau de l\u2019association pour tout tarif ou devis. Solde : 1 mois avant le s\u00e9jour. Linge de lit et m\u00e9nage de fin de s\u00e9jour en option. Moyens de paiement : ch\u00e8que, esp\u00e8ces, virement. La taxe de s\u00e9jour se r\u00e8gle sur place (par personne et par nuit, mineurs exon\u00e9r\u00e9s).',
+  'Conditions : arriv\u00e9e \u00e0 partir de 16h, d\u00e9part avant 10h. Les montants (arrhes, solde, linge, m\u00e9nage, adh\u00e9sion) ne sont pas communiqu\u00e9s pour le moment : orienter vers le bureau de l\u2019association pour tout tarif ou devis. Solde : 1 mois avant le s\u00e9jour. Linge de lit et m\u00e9nage de fin de s\u00e9jour en option. Moyens de paiement : ch\u00e8que, esp\u00e8ces, virement. La taxe de s\u00e9jour se r\u00e8gle sur place (par personne et par nuit, mineurs exon\u00e9r\u00e9s).',
   'R\u00e9servation : calendrier des disponibilit\u00e9s et calcul du tarif sur la page R\u00e9servation du site (chalet-bellevue.fr/reservation). La demande est valid\u00e9e par le bureau de l\u2019association sous 48 h. La location est ouverte \u00e0 tous, avec adh\u00e9sion annuelle.',
   'Contact : e-mail contact@chalet-bellevue.fr, ou formulaire de la page Contact.',
   'Environs : Thermes de Luchon (environ 1 km), Luchon-Superbagn\u00e8res (ski, environ 25 min, 18 km, t\u00e9l\u00e9cabine de 8 min), Peyragudes (environ 20 min), lac d\'O\u00f4 (environ 25 min, randonn\u00e9e de 6,6 km aller-retour), vall\u00e9e du Lys et Hospice de France (environ 15 min), sports outdoor (VTT, escalade, via ferrata, parapente, canyoning, \u00e9quitation), patrimoine Belle \u00c9poque (all\u00e9es d\'\u00c9tigny, Casino), march\u00e9s de producteurs \u00e0 Luchon le mercredi et le samedi matin.',
@@ -1185,7 +1185,7 @@ async function createReservation(request, env) {
   // maintenant) et solde (location seule, dû 1 mois avant le séjour).
   const periodLabel = `du ${checkIn} au ${checkOut}`;
   await createInvoice(env, {
-    type: 'reservation_deposit', direction: 'in', label: `Acompte + adhésion — réservation ${periodLabel}`,
+    type: 'reservation_deposit', direction: 'in', label: `Arrhes + adhésion — réservation ${periodLabel}`,
     amount: price.deposit, status: 'pending', dueDate: todayIso(),
     memberId: member.id, reservationId, checkIn, checkOut,
   });
@@ -1663,7 +1663,7 @@ async function lastMinuteRoutes(request, env, pathname, method) {
      - seule une réservation CONFIRMÉE de l'adhérent connecté peut être payée ;
      - aucune notification n'est crue sur parole : le paiement est revérifié
        auprès de l'API HelloAsso avant de passer la réservation en
-       « Acompte payé » (même effet que le bouton admin).
+       « Arrhes payées » (même effet que le bouton admin).
    ========================================================================= */
 
 function haBase(env) {
@@ -1769,7 +1769,7 @@ const HA_RESULT = {
   'non-validee': ['Réservation pas encore validée', 'Le paiement en ligne s\'ouvre dès que l\'association a validé votre réservation.'],
   'deja-payee': ['Tout est déjà réglé', 'Il n\'y a plus rien à payer pour cette réservation. Merci !'],
   rien: ['Rien à régler pour le moment', 'Aucun montant n\'est en attente de paiement pour cette réservation.'],
-  'acompte-d-abord': ['Réglez d\'abord l\'acompte', 'Le solde pourra être payé une fois l\'acompte réglé.'],
+  'acompte-d-abord': ['Réglez d\'abord les arrhes', 'Le solde pourra être payé une fois les arrhes réglées.'],
   introuvable: ['Lien de paiement invalide', 'Ce lien n\'est pas reconnu. Contactez-nous à contact@chalet-bellevue.fr.'],
   indisponible: ['Paiement en ligne indisponible', 'Le paiement en ligne est momentanément indisponible. Réessayez plus tard, ou réglez par virement, chèque ou espèces.'],
 };
@@ -1835,7 +1835,7 @@ async function haCheckoutFor(env, r, part, from) {
       body: JSON.stringify({
         totalAmount: amountCents,
         initialAmount: amountCents,
-        itemName: ((isBalance ? 'Solde' : 'Acompte + adhesion') + ' - sejour du ' + r.check_in + ' au ' + r.check_out).slice(0, 250),
+        itemName: ((isBalance ? 'Solde' : 'Arrhes + adhesion') + ' - sejour du ' + r.check_in + ' au ' + r.check_out).slice(0, 250),
         backUrl: from === 'lien' ? site + '/api/payments/helloasso/return?resa=' + r.id + '&annule=1' + src : site + '/espace-abonne?paiement=annule',
         errorUrl: site + '/api/payments/helloasso/return?resa=' + r.id + '&err=1' + src,
         returnUrl: site + '/api/payments/helloasso/return?resa=' + r.id + src,
@@ -1885,7 +1885,7 @@ async function haVerifyCheckout(env, checkoutIntentId) {
         await env.DB.prepare("UPDATE invoices SET status = 'paid', paid_at = COALESCE(paid_at, ?) WHERE id = ?").bind(nowIso(), inv.id).run();
       }
     } else {
-      // Même effet que le bouton admin « Acompte payé » (ou « Tout payé » si le solde l'était déjà).
+      // Même effet que le bouton admin « Arrhes payées » (ou « Tout payé » si le solde l'était déjà).
       await updateReservationStatus(env, row.reservation_id, { payment: bal && bal.status === 'paid' ? 'full' : 'deposit' });
     }
     await env.DB.prepare("UPDATE invoices SET notes = TRIM(COALESCE(notes, '') || ' Payé en ligne via HelloAsso (commande ' || ? || ').') WHERE id = ?")
@@ -1939,21 +1939,21 @@ async function haWebhook(request, env) {
  *  Envoyé une seule fois par réservation, par la tâche planifiée (toutes les 30 min),
  *  dès qu'une réservation est validée et que son acompte reste à payer. */
 function emailPayLinkHtml(d) {
-  const rows = [emRow('Acompte + adhésion', emEur(d.depositAmount), { bold: true })];
+  const rows = [emRow('Arrhes + adhésion', emEur(d.depositAmount), { bold: true })];
   if (d.balanceAmount) rows.push(emRow('Solde' + (d.balanceDue ? ' (avant le ' + emDate(d.balanceDue) + ')' : ''), emEur(d.balanceAmount)));
   const body =
     '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>bonne nouvelle : votre réservation est <strong>validée</strong> par l\'association.</p>' +
     emStay(d.checkIn, d.checkOut) +
     emLabel('À régler') + emTable(rows) + '<div style="height:18px;"></div>' +
-    '<p style="margin:0 0 14px;">Vous pouvez régler l\'acompte en ligne, en quelques clics, par carte bancaire :</p>' +
-    emButton(d.link, 'Payer l\'acompte en ligne') + '<div style="height:10px;"></div>' +
+    '<p style="margin:0 0 14px;">Vous pouvez régler les arrhes en ligne, en quelques clics, par carte bancaire :</p>' +
+    emButton(d.link, 'Payer les arrhes en ligne') + '<div style="height:10px;"></div>' +
     '<p style="margin:0 0 18px;font:400 13px/1.6 ' + EM_SANS + ';color:#6f6a60;">Ce lien est personnel : gardez ce mail, il vous servira aussi à régler le solde le moment venu. ' +
     'Paiement sécurisé par HelloAsso, la plateforme de paiement de l\'association. HelloAsso peut vous proposer une contribution volontaire à son fonctionnement : elle est facultative.<br>' +
     'Si le bouton ne fonctionne pas : <a href="' + d.link + '" style="color:#c0693e;">' + d.link + '</a></p>' +
     '<p style="margin:0 0 18px;font:400 14px ' + EM_SANS + ';">Vous préférez le virement, le chèque ou les espèces ? C\'est toujours possible : répondez simplement à ce mail. ' +
     'Vous pouvez aussi payer depuis <a href="' + EM_SITE + '/login" style="color:#c0693e;">votre espace adhérent</a>.</p>' +
     '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">À très bientôt à Luchon,<br>L\'équipe de l\'association A.C.T.E.S</p>';
-  return emLayout({ title: 'Votre réservation est validée', preheader: 'Réglez votre acompte en ligne — séjour du ' + emDate(d.checkIn), body: body });
+  return emLayout({ title: 'Votre réservation est validée', preheader: 'Réglez vos arrhes en ligne — séjour du ' + emDate(d.checkIn), body: body });
 }
 
 async function runPayLinkEmails(env) {
@@ -1971,7 +1971,7 @@ async function runPayLinkEmails(env) {
     const token = await payLinkToken(env, r.id);
     const ok = await sendEmail(env, {
       to: r.email,
-      subject: 'Chalet Bellevue — réservation validée : réglez votre acompte en ligne',
+      subject: 'Chalet Bellevue — réservation validée : réglez vos arrhes en ligne',
       html: emailPayLinkHtml({
         name: r.full_name, checkIn: r.check_in, checkOut: r.check_out, link: payLinkUrl(env, token),
         depositAmount: dep.amount, balanceAmount: bal && bal.status !== 'paid' ? bal.amount : 0, balanceDue: bal ? bal.due_date : null,
@@ -2236,7 +2236,7 @@ async function holdNewMemberAccount(env, memberId, reservationId) {
 
 function emailAccountOpenHtml(d) {
   const body =
-    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>votre réservation est validée et votre acompte est réglé : merci ! Votre espace adhérent A.C.T.E.S est maintenant ouvert.</p>' +
+    '<p style="margin:0 0 16px;">Bonjour ' + emEsc(d.name) + ',<br>votre réservation est validée et vos arrhes sont réglées : merci ! Votre espace adhérent A.C.T.E.S est maintenant ouvert.</p>' +
     emLabel('Vos identifiants') +
     emBox('<div style="font:400 14px/1.9 ' + EM_SANS + ';">Identifiant : <strong>' + emEsc(d.email) + '</strong><br>Mot de passe temporaire : ' +
       '<span style="display:inline-block;font:700 15px Consolas,Menlo,monospace;background:#ffffff;border:1px dashed #b98d46;border-radius:6px;padding:2px 10px;color:#1f3d2b;">' + emEsc(d.tempPassword) + '</span></div>' +
@@ -2244,7 +2244,7 @@ function emailAccountOpenHtml(d) {
       emButton(EM_SITE + '/login', 'Accéder à mon espace adhérent')) +
     '<p style="margin:0 0 18px;font:400 14px ' + EM_SANS + ';">Votre espace séjour reste accessible avec le même lien qu\'avant pour l\'organisation de votre séjour.</p>' +
     '<p style="margin:0 0 24px;font:italic 16px ' + EM_SERIF + ';color:#1f3d2b;">À très bientôt à Luchon,<br>L\'équipe de l\'association A.C.T.E.S</p>';
-  return emLayout({ title: 'Votre espace adhérent est ouvert', preheader: 'Réservation validée et acompte réglé', body: body });
+  return emLayout({ title: 'Votre espace adhérent est ouvert', preheader: 'Réservation validée et arrhes réglées', body: body });
 }
 
 async function runMemberActivation(env) {
