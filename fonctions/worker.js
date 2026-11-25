@@ -2355,7 +2355,7 @@ ul.cases{list-style:none;padding-left:0;columns:2;column-gap:10mm}ul.cases li{br
 
 // chat.js
 var FICHE = [
-  "Chalet Bellevue, g\xE9r\xE9 par l'association A.C.T.E.S (loi 1901). Adresse : Domaine Bellevue, 2 Impasse du Poujaous, 31110 Bagn\xE8res-de-Luchon, \xE0 1 km du centre. Chalet enti\xE8rement ind\xE9pendant, 24 personnes maximum, \xE9tablissement agr\xE9\xE9 Jeunesse et Sport. Animaux accept\xE9s s'ils sont signal\xE9s lors de la r\xE9servation.",
+  "Chalet Bellevue, g\xE9r\xE9 par l'association A.C.T.E.S (loi 1901). Adresse : Domaine Bellevue, 2 Impasse du Poujaou, 31110 Bagn\xE8res-de-Luchon, \xE0 1 km du centre. Chalet enti\xE8rement ind\xE9pendant, 24 personnes maximum, \xE9tablissement agr\xE9\xE9 Jeunesse et Sport. Animaux accept\xE9s s'ils sont signal\xE9s lors de la r\xE9servation.",
   "Couchages : 6 chambres, 23 lits (22 simples et 1 double). Ch.1 : 3 lits superpos\xE9s (6 places). Ch.2 : 3 lits superpos\xE9s (6 places). Ch.3 : 2 lits superpos\xE9s (4 places). Ch.4 : 2 lits superpos\xE9s + 2 lits 90 cm (6 places). Ch.5 : 2 lits 90 cm (2 places). Ch.6 : 1 lit 140 cm (2 places).",
   "Espaces : salle \xE0 manger de 45 m2, salon de 25 m2, jardin clos de 1500 m2, terrasse, barbecue, salon de jardin, parking priv\xE9 (8 voitures).",
   "\xC9quipements : cuisine \xE9quip\xE9e (2 r\xE9frig\xE9rateurs + 1 cong\xE9lateur, gazini\xE8re 5 feux et four gaz, lave-vaisselle, micro-ondes, 3 appareils \xE0 raclette, 2 cafeti\xE8res, bouilloire, grille-pain), 2 salles d'eau avec 4 douches individuelles, 5 lavabos, 3 WC ind\xE9pendants, s\xE8che-cheveux, t\xE9l\xE9vision, WiFi gratuit, chauffage au gaz, lave-linge et s\xE8che-linge privatifs, mat\xE9riel de repassage.",

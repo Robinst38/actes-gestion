@@ -176,7 +176,7 @@ function habiller(texte: string, sujet?: string): string {
     + '<div style="font:700 10px ' + SANS + ';letter-spacing:.18em;color:' + OR + ';margin-top:4px;">A.C.T.E.S · BAGNÈRES-DE-LUCHON</div></td></tr>'
     + '<tr><td style="padding:28px 28px 10px;">' + corps + "</td></tr>"
     + '<tr><td style="background:' + FOND + ';padding:16px 28px;font:12px/1.6 ' + SANS + ';color:' + GRIS + ';">'
-    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon<br>"
+    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaou, 31110 Bagnères-de-Luchon<br>"
     + '<a href="https://www.chalet-bellevue.fr" style="color:' + GRIS + ';">www.chalet-bellevue.fr</a> · Une question ? Répondez simplement à cet e-mail.'
     + "</td></tr></table></td></tr></table></body></html>";
 }

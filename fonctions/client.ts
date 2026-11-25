@@ -304,7 +304,7 @@ function habiller(texte: string, sujet?: string): string {
     + '<div style="font:700 10px ' + SANS + ';letter-spacing:.18em;color:' + OR + ';margin-top:4px;">A.C.T.E.S · BAGNÈRES-DE-LUCHON</div></td></tr>'
     + '<tr><td style="padding:28px 28px 10px;">' + corps + "</td></tr>"
     + '<tr><td style="background:' + FOND + ';padding:16px 28px;font:12px/1.6 ' + SANS + ';color:' + GRIS + ';">'
-    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon<br>"
+    + "Association A.C.T.E.S · Chalet Bellevue, 2 Impasse du Poujaou, 31110 Bagnères-de-Luchon<br>"
     + '<a href="https://www.chalet-bellevue.fr" style="color:' + GRIS + ';">www.chalet-bellevue.fr</a> · Une question ? Répondez simplement à cet e-mail.'
     + "</td></tr></table></td></tr></table></body></html>";
 }
@@ -548,7 +548,7 @@ async function pdfExemplaire(d: any, r: any, v: any, ent: any): Promise<string> 
   y -= hs;
   // Pied de page sur chaque page
   const pages = doc.getPages();
-  const pied = net((ent.nom || "A.C.T.E.S") + " — association loi 1901 · Chalet Bellevue, 2 Impasse du Poujaous, 31110 Bagnères-de-Luchon" + (ent.email ? " · " + ent.email : ""));
+  const pied = net((ent.nom || "A.C.T.E.S") + " — association loi 1901 · Chalet Bellevue, 2 Impasse du Poujaou, 31110 Bagnères-de-Luchon" + (ent.email ? " · " + ent.email : ""));
   pages.forEach((p: any, i: number) => {
     p.drawRectangle({ x: M, y: 44, width: LW, height: 0.6, color: FILET });
     p.drawText(pied.slice(0, 130), { x: M, y: 30, size: 7, font: helv, color: GRIS });
@@ -661,7 +661,7 @@ A.C.T.E.S., propriétaire du chalet d'accueil de groupes « Bellevue » à Bagn�
 
 ## Article 2 — Nature du bâtiment
 
-Le chalet est situé 2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagnères-de-Luchon (avenue de Vénasque). C'est un centre de vacances agréé par la Direction départementale de la Jeunesse et des Sports de Toulouse sous le n° 031.042.089, établissement de type R, 5e catégorie.
+Le chalet est situé 2 Impasse du Poujaou, Domaine Bellevue, 31110 Bagnères-de-Luchon (avenue de Vénasque). C'est un centre de vacances agréé par la Direction départementale de la Jeunesse et des Sports de Toulouse sous le n° 031.042.089, établissement de type R, 5e catégorie.
 
 La maison compte 2 niveaux et 24 couchages. Au rez-de-chaussée : cuisine, salle à manger, salon, salle de bains (2 douches, 3 lavabos), WC, chambre 1 (1 lit 2 places de 140) et chambre 2 (2 lits de 90). À l'étage : salle de bains (2 douches, 2 lavabos), 2 WC, chambre 3 (6 couchages en lits superposés de 80), chambre 4 (4 couchages en lits superposés), chambre 5 (6 couchages en lits superposés) et chambre 6 (2 couchages en lits superposés et 2 lits de 90).
 
@@ -716,7 +716,7 @@ L'utilisateur peut signer la présente convention, le principe locatif et la con
     champs: [
       { id: "evacuation", lib: "Personne désignée pour vérifier l'évacuation (nom et prénom)" },
     ],
-    texte: `Cette convention règle la sécurité pendant l'utilisation du Chalet Bellevue, 2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagnères-de-Luchon. Elle est obligatoire pour valider la réservation et se signe au moment de la réservation, en ligne dans l'espace séjour ou sur papier en la renvoyant signée par e-mail. La personne qui la signe est appelée « l'organisateur ».
+    texte: `Cette convention règle la sécurité pendant l'utilisation du Chalet Bellevue, 2 Impasse du Poujaou, Domaine Bellevue, 31110 Bagnères-de-Luchon. Elle est obligatoire pour valider la réservation et se signe au moment de la réservation, en ligne dans l'espace séjour ou sur papier en la renvoyant signée par e-mail. La personne qui la signe est appelée « l'organisateur ».
 
 ## I — Avant l'utilisation des locaux
 
