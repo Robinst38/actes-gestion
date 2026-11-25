@@ -574,8 +574,21 @@ async function pdfExemplaire(d: any, r: any, v: any, ent: any): Promise<string> 
 
 async function trouver(sb: any, jeton: string) {
   if (!/^[a-f0-9]{24,64}$/.test(jeton || "")) return null;
-  return (await lireCollection(sb, "crm_actes_resas")).find((r) => r.jeton === jeton) || null;
+  const r = (await lireCollection(sb, "crm_actes_resas")).find((x) => x.jeton === jeton);
+  if (r) return r;
+  // Séjours Airbnb / Booking : lien de signature des 3 documents (créé depuis la page de la plateforme dans le logiciel)
+  const p = (await lireCollection(sb, "actes_plateformes")).find((x) => x.jeton === jeton);
+  return p ? resaPlateforme(p) : null;
 }
+/** Séjour Airbnb / Booking vu comme une réservation : documents seulement (ni adhésion, ni paiement : tout est réglé sur la plateforme). */
+function resaPlateforme(p: any) {
+  const nom = String(p.guest || "").trim();
+  return { ...p, __col: "actes_plateformes", plateforme: String(p.platform || "la plateforme"), groupe: nom, contact: nom, debut: p.arrivee, fin: p.depart,
+    adultes: num(p.guests) || 0, enfants: 0, statut: /annul/i.test(String(p.statut || "")) ? "annulee" : "confirmee", canal: String(p.platform || ""),
+    email: String(p.email || ""), detailTarif: [], paiements: [], paiementsEnAttente: [] };
+}
+/** Collection où enregistrer une réservation (réservation directe ou séjour Airbnb / Booking). */
+const colDe = (r: any) => (r && r.__col) || "crm_actes_resas";
 async function empreinte(t: string) {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
   return Array.from(new Uint8Array(h)).slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -593,6 +606,7 @@ async function adherentDe(sb: any, email: string) {
  *  - "limite"   : bulletin rempli mais cotisation pas encore réglée → seulement le suivi de la réservation et le règlement ;
  *  - "complet"  : cotisation réglée (ou pas d'adhésion sur cette réservation). */
 async function etatAdhesion(sb: any, r: any, cfg: any) {
+  if (r.plateforme) return { aFaire: false, cotisation: 0, montant: 0, payee: true, remplie: false, type: "premiere", acces: "complet", ancien: null, derniere: "" };
   const lignes = (r.detailTarif || []).filter((l: any) => l.k === "adhesion");
   const aFaire = lignes.length > 0;
   const cotisation = num(cfg.adhesionSejour) || 30;
@@ -745,7 +759,20 @@ function docsSignes(r: any): Record<string, any> {
   return s;
 }
 const docsComplets = (r: any) => { const s = docsSignes(r); return DOCS_RESA.every((d) => !!s[d.id]); };
-const texteDoc = (d: any, cfg: any) => d.id === "utilisation" && cfg.reglement ? d.texte + "\n\n## Règlement intérieur\n\n" + String(cfg.reglement) : d.texte;
+// Séjours Airbnb / Booking : principe locatif adapté (réservation et paiement sur la plateforme). Texte à faire valider par le bureau.
+const principePlateforme = (pf: string) => `Vous avez réservé le Chalet Bellevue sur ${pf}. Le chalet appartient à l'association A.C.T.E.S. (loi 1901), qui le met en location.
+
+## Votre réservation
+
+1. La réservation et son paiement se font sur ${pf}, selon les conditions de la plateforme.
+2. Avant votre arrivée, vous signez les trois documents du séjour : ce principe locatif, la convention d'utilisation et la convention de mise à disposition « sécurité ». La signature se fait en ligne et en une fois dans votre espace séjour, avec un code reçu par e-mail, ou sur papier en renvoyant les documents signés par e-mail à l'association.
+3. Vous recevez par e-mail un exemplaire de chaque document signé.
+
+## Règlement
+
+• Le prix du séjour et les conditions d'annulation sont ceux indiqués sur ${pf}.
+• Le paiement du séjour se fait sur ${pf}.`;
+const texteDoc = (d: any, cfg: any, r?: any) => r && r.plateforme && d.id === "principe" ? principePlateforme(String(r.plateforme)) : d.id === "utilisation" && cfg.reglement ? d.texte + "\n\n## Règlement intérieur\n\n" + String(cfg.reglement) : d.texte;
 
 /** Clé du dépôt des documents de l'équipe (lien privé envoyé au bureau), dérivée du secret du site. */
 async function jetonDepot() {
@@ -782,7 +809,7 @@ const masquerEmail = (e: string) => String(e || "").replace(/^(.)[^@]*(@.*)$/, "
 /** Prévient le bureau quand les trois documents d'une réservation sont signés (une seule fois). */
 async function siDocsComplets(sb: any, r: any, s: Record<string, any>) {
   if (r.documentsCompletsLe || !DOCS_RESA.every((d) => !!s[d.id])) return;
-  await fusionDoc(sb, "crm_actes_resas", r.id, { documentsCompletsLe: new Date().toISOString() });
+  await fusionDoc(sb, colDe(r), r.id, { documentsCompletsLe: new Date().toISOString() });
   if (!smtpConfigure()) return;
   const dest = Deno.env.get("SMTP_USER");
   if (!dest) return;
@@ -847,11 +874,11 @@ async function agent(sb: any, b: any, cfg: any, ent: any): Promise<Response> {
       const m = /^([\w-]{1,80}):(principe|utilisation|securite|adhesion)$/.exec(String(f && f.cle || ""));
       const r = m && resas.find((x) => String(x.id) === m[1]);
       if (m && r && m[2] === "adhesion") {
-        if (r.adhesionFiche && /^[\w-]{10,}$/.test(String(f.driveId || ""))) { await fusionDoc(sb, "crm_actes_resas", r.id, { adhesionFiche: { ...r.adhesionFiche, driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } }); n++; }
+        if (r.adhesionFiche && /^[\w-]{10,}$/.test(String(f.driveId || ""))) { await fusionDoc(sb, colDe(r), r.id, { adhesionFiche: { ...r.adhesionFiche, driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } }); n++; }
         continue;
       }
       if (!r || !r.documentsSignes || !r.documentsSignes[m[2]] || !/^[\w-]{10,}$/.test(String(f.driveId || ""))) continue;
-      await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } } });
+      await fusionDoc(sb, colDe(r), r.id, { documentsSignes: { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId), driveUrl: t(f.driveUrl, 300) } } });
       r.documentsSignes = { ...r.documentsSignes, [m[2]]: { ...r.documentsSignes[m[2]], driveId: String(f.driveId) } };
       n++;
     }
@@ -876,7 +903,7 @@ async function agent(sb: any, b: any, cfg: any, ent: any): Promise<Response> {
       bilan.push({ d, ok, problemes });
     }
     if (!bilan.length) return json({ ok: true, rien: true });
-    await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns });
+    await fusionDoc(sb, colDe(r), r.id, { documentsSignes: ns });
     const s2 = docsSignes({ ...r, documentsSignes: ns });
     await siDocsComplets(sb, r, s2);
     if (smtpConfigure()) {
@@ -935,7 +962,7 @@ Deno.serve(async (req) => {
     const ea = await etatAdhesion(sb, r, cfg);
     const complet = ea.acces === "complet";
     return json({
-      acces: ea.acces,
+      acces: ea.acces, plateforme: r.plateforme || "",
       chalet: cfg.nomChalet, ville: cfg.ville, asso: ent.nom || "A.C.T.E.S", tel: cfg.telAsso || ent.tel || "", email: ent.email || "",
       groupe: r.groupe || "", contact: r.contact || "", debut: r.debut, fin: r.fin, nuits: nbN(r.debut, r.fin), personnes: pers(r),
       statut: r.statut, paiementDirect: !!r.paiementDirect, total: total(r), paye: paye(r), reste: Math.max(0, reste(r)), detail: r.detailTarif || [],
@@ -943,10 +970,10 @@ Deno.serve(async (req) => {
       caution: num((r.caution || {}).montant) || num(cfg.caution),
       contrat: { conditions: cfg.conditions || "", reglement: cfg.reglement || "", accepte: r.contratAccepte || null },
       // Les trois documents obligatoires pour valider la réservation, et leur état de signature
-      documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, attestation: (d as any).attestation || "", texte: texteDoc(d, cfg),
+      documents: (() => { const s = docsSignes(r); return DOCS_RESA.map((d) => ({ id: d.id, titre: d.titre, case: d.case, champs: d.champs, attestation: (d as any).attestation || "", texte: texteDoc(d, cfg, r),
         signe: s[d.id] ? { mode: s[d.id].mode, nom: s[d.id].nom || "", le: s[d.id].le } : null,
         verification: !s[d.id] && r.documentsSignes && r.documentsSignes[d.id] && r.documentsSignes[d.id].statut === "a_verifier" ? { le: r.documentsSignes[d.id].le } : null })); })(),
-      signature: { email: masquerEmail(r.email || ""), codeEnvoye: !!(r.signatureCode && r.signatureCode.empreinte && Date.parse(r.signatureCode.expire || "") > Date.now()), possible: !!(r.email && smtpConfigure()) },
+      signature: { email: masquerEmail(r.email || ""), codeEnvoye: !!(r.signatureCode && r.signatureCode.empreinte && Date.parse(r.signatureCode.expire || "") > Date.now()), possible: !!((r.email || r.plateforme) && smtpConfigure()), saisirEmail: !!(r.plateforme && !r.email) },
       documentsComplets: docsComplets(r),
       paiementEnLigne: helloassoConfigure(),
       // Organisation du séjour, remplie par le groupe : répartition des chambres, liste de choses à faire, activités.
@@ -1026,7 +1053,7 @@ Deno.serve(async (req) => {
         if (actuel) return erreur("Ce document est déjà signé.", 409);
         const rec = { mode: "email", statut: "valide", le: new Date().toISOString(), par: t(b.par, 60) || "l'équipe", note: t(b.note, 200) };
         const s2 = { ...docsSignes(r), [d.id]: rec };
-        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: { ...(r.documentsSignes || {}), [d.id]: rec } });
+        await fusionDoc(sb, colDe(r), r.id, { documentsSignes: { ...(r.documentsSignes || {}), [d.id]: rec } });
         await siDocsComplets(sb, r, s2);
         return json({ ok: true });
       }
@@ -1034,7 +1061,7 @@ Deno.serve(async (req) => {
       if (b.action === "depot-confirmer") {
         if (!brutDoc || brutDoc.statut !== "a_verifier") return erreur("Ce document n'est pas en attente de vérification.", 409);
         const ns = { ...(r.documentsSignes || {}), [d.id]: { ...brutDoc, statut: "valide", par: t(b.par, 60) || "l'équipe", confirmeLe: new Date().toISOString() } };
-        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns });
+        await fusionDoc(sb, colDe(r), r.id, { documentsSignes: ns });
         await siDocsComplets(sb, r, docsSignes({ ...r, documentsSignes: ns }));
         return json({ ok: true });
       }
@@ -1044,7 +1071,7 @@ Deno.serve(async (req) => {
         if (motif.length < 3) return erreur("Merci d'indiquer ce qui ne va pas : ce sera envoyé au client.");
         const ns = { ...(r.documentsSignes || {}) };
         delete ns[d.id];
-        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, documentsHistorique: [...(r.documentsHistorique || []), { doc: d.id, ...brutDoc, statut: "refuse", refus: { motif, par: t(b.par, 60), le: new Date().toISOString() } }].slice(-30) });
+        await fusionDoc(sb, colDe(r), r.id, { documentsSignes: ns, documentsHistorique: [...(r.documentsHistorique || []), { doc: d.id, ...brutDoc, statut: "refuse", refus: { motif, par: t(b.par, 60), le: new Date().toISOString() } }].slice(-30) });
         let mail = false;
         if (smtpConfigure() && r.email) await envoyer({ to: r.email, subject: "Document à renvoyer pour votre séjour au " + cfg.nomChalet,
           body: "Bonjour " + (r.contact || "") + ",\n\nMerci pour l'envoi du document « " + d.titre + " ». Nous ne pouvons pas l'enregistrer : " + motif
@@ -1055,7 +1082,7 @@ Deno.serve(async (req) => {
         if (!actuel || actuel.mode !== "email") return erreur("Seul un document enregistré « reçu par e-mail » peut être retiré.", 409);
         const ns = { ...(r.documentsSignes || {}) };
         delete ns[d.id];
-        await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, documentsCompletsLe: null });
+        await fusionDoc(sb, colDe(r), r.id, { documentsSignes: ns, documentsCompletsLe: null });
         return json({ ok: true });
       }
       return erreur("Action inconnue.");
@@ -1084,7 +1111,7 @@ Deno.serve(async (req) => {
         ...(jour ? { jour: /^\d{4}-\d{2}-\d{2}$/.test(String(x && x.jour)) ? String(x.jour) : "" } : {}),
       })).filter((x: any) => x.t);
       const programme = { taches: liste((b.programme || {}).taches, false), activites: liste((b.programme || {}).activites, true) };
-      await fusionDoc(sb, "crm_actes_resas", r.id, { couchage, programme, espaceMajLe: new Date().toISOString() });
+      await fusionDoc(sb, colDe(r), r.id, { couchage, programme, espaceMajLe: new Date().toISOString() });
       return json({ ok: true });
     }
 
@@ -1134,7 +1161,7 @@ Deno.serve(async (req) => {
       const type = renouv ? "renouvellement" : "premiere";
       const enreg = { ...fiche, type, le, annee: le.slice(0, 4), cotisation: num(cfg.adhesionSejour) || 30, resa: String(r.id),
         signature: { nom: signature, le, ip: t(b.ip, 60), ua: t(b.ua, 200), version } };
-      await fusionDoc(sb, "crm_actes_resas", r.id, { adhesionFiche: enreg });
+      await fusionDoc(sb, colDe(r), r.id, { adhesionFiche: enreg });
       // Une fiche par adresse e-mail. Si l'adhérent qui renouvelle a changé d'e-mail, on met à jour sa fiche existante.
       const idAdh = renouv && ea.ancien.id ? String(ea.ancien.id) : "adh_" + (await empreinte(fiche.email));
       const ancien = renouv ? ea.ancien : await lireDoc(sb, "crm_adherents", idAdh);
@@ -1159,11 +1186,18 @@ Deno.serve(async (req) => {
     // le texte exact signé, son empreinte SHA-256, la date, l'heure, l'adresse IP et le navigateur. Un exemplaire part au signataire.
     if (b.action === "code-signature") {
       if (docsComplets(r)) return json({ ok: true, deja: true });
+      // Séjour Airbnb / Booking : le voyageur indique lui-même son adresse e-mail (la plateforme ne la transmet pas toujours).
+      if (r.plateforme && !r.email) {
+        const m = String(b.email || "").trim().toLowerCase();
+        if (!/^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/i.test(m)) return erreur("Indiquez votre adresse e-mail pour recevoir le code de signature.", 400);
+        await fusionDoc(sb, colDe(r), r.id, { email: m });
+        r.email = m;
+      }
       if (!r.email || !smtpConfigure()) return erreur("La signature en ligne n'est pas disponible pour cette réservation : merci d'imprimer les documents, de les signer et de les envoyer par e-mail à l'association.", 409);
       const avant = r.signatureCode && r.signatureCode.envoyeLe ? Date.parse(r.signatureCode.envoyeLe) : 0;
       if (Date.now() - avant < 60e3) return erreur("Un code vient d'être envoyé : merci de patienter une minute avant d'en demander un autre.", 429);
       const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, "0");
-      await fusionDoc(sb, "crm_actes_resas", r.id, { signatureCode: { empreinte: await sha256(r.id + ":" + code), envoyeLe: new Date().toISOString(), expire: new Date(Date.now() + 15 * 60e3).toISOString(), essais: 0 } });
+      await fusionDoc(sb, colDe(r), r.id, { signatureCode: { empreinte: await sha256(r.id + ":" + code), envoyeLe: new Date().toISOString(), expire: new Date(Date.now() + 15 * 60e3).toISOString(), essais: 0 } });
       await envoyer({ to: r.email, subject: "Votre code de signature : " + code,
         body: "Bonjour " + (r.contact || "") + ",\n\nVoici votre code pour signer en ligne les documents de votre séjour au " + cfg.nomChalet + " du " + fd(r.debut) + " au " + fd(r.fin) + " :\n\n" + code
           + "\n\nIl est valable 15 minutes. Si vous n'avez pas demandé ce code, ignorez ce message.\n\n" + (ent.nom || "A.C.T.E.S") });
@@ -1180,7 +1214,7 @@ Deno.serve(async (req) => {
       if (Date.parse(c.expire || "") < Date.now()) return erreur("Ce code a expiré : demandez-en un nouveau.");
       if (num(c.essais) >= 5) return erreur("Trop d'essais : demandez un nouveau code.");
       if ((await sha256(r.id + ":" + t(b.code, 6).replace(/\D/g, ""))) !== c.empreinte) {
-        await fusionDoc(sb, "crm_actes_resas", r.id, { signatureCode: { ...c, essais: num(c.essais) + 1 } });
+        await fusionDoc(sb, colDe(r), r.id, { signatureCode: { ...c, essais: num(c.essais) + 1 } });
         return erreur("Code incorrect.");
       }
       const nom = t(b.nom, 120);
@@ -1196,7 +1230,7 @@ Deno.serve(async (req) => {
       const ns = { ...(r.documentsSignes || {}) };
       const exemplaires: { filename: string; content: string; mimeType: string }[] = [];
       for (const d of aSigner) {
-        const texte = texteDoc(d, cfg);
+        const texte = texteDoc(d, cfg, r);
         const ch = d.champs.length ? Object.fromEntries(d.champs.map((x) => [x.id, champs[x.id]])) : null;
         const rec = { mode: "electronique", statut: "valide", nom, le, ip, ua, identification: "code à usage unique envoyé à " + r.email, version: await sha256(texte), texte, ...(ch ? { champs: ch } : {}), ...((d as any).attestation ? { attestation: (d as any).attestation } : {}) };
         ns[d.id] = rec;
@@ -1211,7 +1245,7 @@ Deno.serve(async (req) => {
         exemplaires.push(pdf ? { filename: nomFichier + ".pdf", content: pdf, mimeType: "application/pdf" }
           : { filename: nomFichier + ".txt", content: btoa(String.fromCharCode(...new TextEncoder().encode(preuve))), mimeType: "text/plain; charset=utf-8" });
       }
-      await fusionDoc(sb, "crm_actes_resas", r.id, { documentsSignes: ns, signatureCode: null,
+      await fusionDoc(sb, colDe(r), r.id, { documentsSignes: ns, signatureCode: null,
         ...(aSigner.some((d) => d.id === "utilisation") && !r.contratAccepte ? { contratAccepte: { le, nom, ip, ua, version: ns.utilisation.version } } : {}) });
       // Un exemplaire des documents signés pour le signataire (support durable) ; copie au bureau.
       if (smtpConfigure()) {
@@ -1230,7 +1264,7 @@ Deno.serve(async (req) => {
       if (nom.length < 2) return erreur("Merci d'indiquer votre nom.");
       const version = await empreinte(String(cfg.conditions) + "\n" + String(cfg.reglement));
       const acc = { le: new Date().toISOString(), nom, ip: String(b.ip || "").slice(0, 60), ua: String(b.ua || "").slice(0, 200), version };
-      await fusionDoc(sb, "crm_actes_resas", r.id, { contratAccepte: acc });
+      await fusionDoc(sb, colDe(r), r.id, { contratAccepte: acc });
       return json({ ok: true });
     }
 
@@ -1251,7 +1285,7 @@ Deno.serve(async (req) => {
         console.error("paiement HelloAsso", String((e as Error).message || e));
         return erreur("Le paiement en ligne est momentanément indisponible : merci de réessayer plus tard ou de contacter l'association.", 502);
       }
-      await fusionDoc(sb, "crm_actes_resas", r.id, { paiementsEnAttente: [...(r.paiementsEnAttente || []), { intentId: String(intent.id), type, montant, le: new Date().toISOString() }] });
+      await fusionDoc(sb, colDe(r), r.id, { paiementsEnAttente: [...(r.paiementsEnAttente || []), { intentId: String(intent.id), type, montant, le: new Date().toISOString() }] });
       return json({ url: intent.redirectUrl });
     }
 

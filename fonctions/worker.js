@@ -1906,7 +1906,7 @@ function sectionDocuments(d, base, codeEnvoye) {
       h += `<p class="msg m-info" style="margin:0">La signature en ligne n'est pas disponible pour cette r\xE9servation : utilisez la version papier ci-dessous.</p>`;
     } else if (!(codeEnvoye || sig.codeEnvoye)) {
       h += `<p>Pour signer, nous vous envoyons un <b>code \xE0 6 chiffres</b> \xE0 l'adresse e-mail de la r\xE9servation${sig.email ? " (" + esc(sig.email) + ")" : ""}. Il prouve que c'est bien vous qui signez.</p>
-<form method="post" action="${base}/code"><div class="btns"><button class="btn btn-v" type="submit">Recevoir mon code de signature</button></div></form>`;
+<form method="post" action="${base}/code">${sig.saisirEmail ? `<label for="sg-email">Votre adresse e-mail (pour recevoir le code et vos exemplaires sign\xE9s)</label><input type="email" id="sg-email" name="email" required maxlength="160" autocomplete="email" style="max-width:360px">` : ""}<div class="btns"><button class="btn btn-v" type="submit">Recevoir mon code de signature</button></div></form>`;
     } else {
       const champs = [].concat(...reste.map((x) => x.champs || []));
       h += `<form method="post" action="${base}/signer-tout" class="dform">
@@ -1949,7 +1949,7 @@ function vueSejour(d, jeton, msg) {
 <div><div class="k">D\xE9part</div><div class="v">${esc(fd(d.fin))}</div></div>
 <div><div class="k">Dur\xE9e</div><div class="v">${d.nuits} nuit${d.nuits > 1 ? "s" : ""}</div></div>
 <div><div class="k">Personnes</div><div class="v">${d.personnes}</div></div></div>
-${d.statut === "demande" && d.paiementDirect ? `<p class="msg m-info" style="margin:16px 0 0"><b>Réservation directe :</b> remplissez votre bulletin d'adhésion, signez les documents puis réglez l'acompte en ligne ci-dessous. Vos dates sont réservées pour vous ; l'association valide votre séjour sous 48 h après le paiement. Si elle ne peut pas le valider, l'acompte vous est intégralement remboursé.</p>` : d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
+${d.plateforme ? `<p class="msg m-info" style="margin:16px 0 0">S\xE9jour r\xE9serv\xE9 et pay\xE9 sur <b>${esc(d.plateforme)}</b>. Il vous reste \xE0 <b>signer les 3 documents ci-dessous avant votre arriv\xE9e</b>.</p>` : ""}${d.statut === "demande" && d.paiementDirect ? `<p class="msg m-info" style="margin:16px 0 0"><b>Réservation directe :</b> remplissez votre bulletin d'adhésion, signez les documents puis réglez l'acompte en ligne ci-dessous. Vos dates sont réservées pour vous ; l'association valide votre séjour sous 48 h après le paiement. Si elle ne peut pas le valider, l'acompte vous est intégralement remboursé.</p>` : d.statut === "demande" || d.statut === "option" ? `<p class="msg m-info" style="margin:16px 0 0">Votre demande est en cours d'examen par l'association. Vous recevrez une confirmation par e-mail.</p>` : ""}</section>`;
   // Accès selon l'adhésion (décidé par le serveur) : "bulletin" → formulaire obligatoire avant tout le reste ;
   // "limite" → cotisation pas encore réglée : suivi de la réservation et règlement seulement ; "complet" → tout l'espace.
   const acces = d.acces || "complet";
@@ -2176,7 +2176,7 @@ async function routeSejour(request, env, url) {
       return redirige("/sejour/" + jeton + (r2.status === 200 ? "?ok=contrat#paiement" : r2.status === 403 ? "?err=acces#adhesion" : "?err=contrat#contrat"));
     }
     if (action === "code") {
-      const r2 = await appel(env, "POST", null, { action: "code-signature", jeton });
+      const r2 = await appel(env, "POST", null, { action: "code-signature", jeton, email: String(f.get("email") || "").slice(0, 160) });
       if (r2.status === 200) return redirige("/sejour/" + jeton + "?code=envoye#signature");
       return redirige("/sejour/" + jeton + "?err=document&detail=" + encodeURIComponent(String(r2.data && r2.data.error || "Le code n'a pas pu \xEAtre envoy\xE9.").slice(0, 220)) + (r2.status === 429 ? "&code=envoye" : "") + "#signature");
     }
