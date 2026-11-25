@@ -393,7 +393,7 @@ function emLayout(o) {
     '<tr><td style="padding:32px 32px 8px;font:400 15px/1.6 ' + EM_SANS + ';color:#2b2b2b;">' +
     '<h1 style="font:600 26px/1.25 ' + EM_SERIF + ';color:#1f3d2b;margin:0 0 14px;">' + o.title + '</h1>' + o.body + '</td></tr>' +
     '<tr><td align="center" bgcolor="#faf6ef" style="background:#faf6ef;border-top:1px solid #e6dfd1;padding:22px 24px;font:400 12px/1.7 ' + EM_SANS + ';color:#6f6a60;">' +
-    '<strong style="color:#1f3d2b;">A.C.T.E.S \u00b7 Chalet Bellevue</strong><br>2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagn\u00e8res-de-Luchon<br>' +
+    '<strong style="color:#1f3d2b;">A.C.T.E.S \u00b7 Chalet Bellevue</strong><br>2 Impasse du Poujaou, Domaine Bellevue, 31110 Bagn\u00e8res-de-Luchon<br>' +
     '<a href="mailto:contact@chalet-bellevue.fr" style="color:#c0693e;text-decoration:none;">contact@chalet-bellevue.fr</a> \u00b7 ' +
     '<a href="' + EM_SITE + '" style="color:#c0693e;text-decoration:none;">chalet-bellevue.fr</a>' +
     '<div style="margin-top:10px;color:#9a9486;">Vous recevez ce message suite \u00e0 une demande faite sur chalet-bellevue.fr. Vous pouvez y r\u00e9pondre directement.</div></td></tr>' +
@@ -437,8 +437,8 @@ function emailReservationHtml(d) {
     (d.message ? emLabel('Votre message') + '<p style="margin:0 0 24px;padding:12px 16px;background:#faf6ef;border-radius:10px;font:italic 14px/1.5 ' + EM_SERIF + ';color:#4a463e;">' + emEsc(d.message).replace(/\n/g, '<br>') + '</p>' : '') +
     emLabel('Infos pratiques') +
     emBox(
-      '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Adresse</strong><br>2 Impasse du Poujaous, Domaine Bellevue, 31110 Bagn\u00e8res-de-Luchon<br>' +
-      '<a href="https://www.google.com/maps/search/?api=1&query=2+Impasse+du+Poujaous+31110+Bagneres-de-Luchon" style="color:#c0693e;">Ouvrir dans Google Maps</a></p>' +
+      '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Adresse</strong><br>2 Impasse du Poujaou, Domaine Bellevue, 31110 Bagn\u00e8res-de-Luchon<br>' +
+      '<a href="https://www.google.com/maps/search/?api=1&query=2+Impasse+du+Poujaou+31110+Bagneres-de-Luchon" style="color:#c0693e;">Ouvrir dans Google Maps</a></p>' +
       '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Horaires</strong><br>Arriv\u00e9e \u00e0 partir de 16h \u00b7 D\u00e9part avant 10h</p>' +
       '<p style="margin:0 0 8px;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Linge de lit</strong> (en option)<br>tarif communiqu\u00e9 par le bureau</p>' +
       '<p style="margin:0;font:400 14px/1.6 ' + EM_SANS + ';"><strong>Une question ?</strong><br><a href="mailto:contact@chalet-bellevue.fr" style="color:#c0693e;">contact@chalet-bellevue.fr</a></p>') +
@@ -653,7 +653,7 @@ async function handleContact(request, env) {
 }
 
 const CHAT_FACTS = [
-  'Chalet Bellevue, g\u00e9r\u00e9 par l\'association A.C.T.E.S (loi 1901). Adresse : Domaine Bellevue, 2 Impasse du Poujaous, 31110 Bagn\u00e8res-de-Luchon, \u00e0 1 km du centre. Chalet enti\u00e8rement ind\u00e9pendant, 24 personnes maximum, \u00e9tablissement agr\u00e9\u00e9 Jeunesse et Sport. Animaux accept\u00e9s s\u2019ils sont signal\u00e9s lors de la r\u00e9servation.',
+  'Chalet Bellevue, g\u00e9r\u00e9 par l\'association A.C.T.E.S (loi 1901). Adresse : Domaine Bellevue, 2 Impasse du Poujaou, 31110 Bagn\u00e8res-de-Luchon, \u00e0 1 km du centre. Chalet enti\u00e8rement ind\u00e9pendant, 24 personnes maximum, \u00e9tablissement agr\u00e9\u00e9 Jeunesse et Sport. Animaux accept\u00e9s s\u2019ils sont signal\u00e9s lors de la r\u00e9servation.',
   'Couchages : 6 chambres, 23 lits (22 simples et 1 double). Ch.1 : 3 lits superpos\u00e9s (6 places). Ch.2 : 3 lits superpos\u00e9s (6 places). Ch.3 : 2 lits superpos\u00e9s (4 places). Ch.4 : 2 lits superpos\u00e9s + 2 lits 90 cm (6 places). Ch.5 : 2 lits 90 cm (2 places). Ch.6 : 1 lit 140 cm (2 places).',
   'Espaces : salle \u00e0 manger de 45 m2, salon de 25 m2, jardin clos de 1500 m2, terrasse, barbecue, salon de jardin, parking priv\u00e9 (8 voitures).',
   '\u00c9quipements : cuisine \u00e9quip\u00e9e (2 r\u00e9frig\u00e9rateurs + 1 cong\u00e9lateur, gazini\u00e8re 5 feux et four gaz, lave-vaisselle, micro-ondes, 3 appareils \u00e0 raclette, 2 cafeti\u00e8res, bouilloire, grille-pain), 2 salles d\'eau avec 4 douches individuelles, 5 lavabos, 3 WC ind\u00e9pendants, s\u00e8che-cheveux, t\u00e9l\u00e9vision, WiFi gratuit, chauffage au gaz, lave-linge et s\u00e8che-linge privatifs, mat\u00e9riel de repassage.',
