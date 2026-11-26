@@ -307,5 +307,6 @@
 <script src="lastminute.js?v=20261021i"></script>
 <script defer src="consent.js?v=20261021i"></script>
 <script defer src="chat.js?v=20261021i"></script>
+<script>/* QR avis : arriver directement sur le formulaire "Laisser un avis" (25/11/2026) */(function(){var h=location.hash;if(h!=="#avis"&&h!=="#laisser-un-avis")return;function go(){var t=document.querySelector(".reviews-form-card")||document.getElementById("avis");if(!t)return;var y=t.getBoundingClientRect().top+window.pageYOffset-100;window.scrollTo(0,y);}if("scrollRestoration" in history)history.scrollRestoration="manual";window.addEventListener("load",function(){go();setTimeout(go,700);setTimeout(go,1800);});})();</script>
 </body>
 </html>
