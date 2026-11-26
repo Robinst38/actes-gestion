@@ -26,6 +26,7 @@
     -webkit-font-smoothing:antialiased;
   }
   img,svg{display:block; max-width:100%;}
+  img{height:auto;}
   a{color:inherit;}
   h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; color:var(--forest);}
   .container{max-width:1180px; margin:0 auto; padding:0 24px;}
@@ -221,7 +222,7 @@
   footer{background:var(--forest); color:rgba(255,255,255,0.85); padding:70px 0 30px;}
   .footer-grid{display:grid; grid-template-columns:1.1fr 0.9fr 0.9fr 1.1fr; gap:40px; margin-bottom:50px;}
   footer h4{color:#fff; font-size:1rem; margin-bottom:16px; font-family:var(--sans); font-weight:700;}
-  footer p, footer a{color:rgba(255,255,255,0.72); font-size:0.9rem;}
+  footer p, footer a{color:rgba(255,255,255,0.82); font-size:0.9rem;}
   footer ul{list-style:none;}
   footer li{margin-bottom:10px;}
   footer a{text-decoration:none;}
@@ -231,7 +232,7 @@
   .map-embed iframe{width:100%; height:100%; border:0;}
   .footer-bottom{
     border-top:1px solid rgba(255,255,255,0.15); padding-top:24px;
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:0.82rem; color:rgba(255,255,255,0.55);
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:0.82rem; color:rgba(255,255,255,0.78);
   }
 
   .sticky-cta{
@@ -941,7 +942,7 @@ nav a{text-align:center; display:block; line-height:1.3;}
 .toast{
   position:fixed; bottom:24px; right:24px; background:var(--forest); color:#fff;
   padding:12px 20px; border-radius:10px; font-size:0.88rem; box-shadow:var(--shadow);
-  opacity:0; transform:translateY(10px); transition:all .25s ease; pointer-events:none; z-index:50;
+  opacity:0; transform:translateY(10px); transition:opacity .25s ease, transform .25s ease; pointer-events:none; z-index:50;
 }
 .toast.is-visible{opacity:1; transform:translateY(0);}
 .toast.is-error{background:#8a2e22;}
@@ -1286,3 +1287,51 @@ nav ul.open .nav-account-mobile a{font-weight:700;color:var(--terracotta-dark);}
 #bk-price-lines,#bk-tax-note,#bk-pay-online-btn{display:none !important;}
 
 /*contraste-20261024*/ .alt-bg .btn-outline-dark,.group-card .btn-outline-dark{border-color:var(--forest);color:var(--forest);} .alt-bg .btn-outline-dark:hover,.group-card .btn-outline-dark:hover{background:var(--forest-pale);color:var(--forest);} .contact-info-card a.btn-primary,.contact-info-card a.btn-primary:hover{color:#fff;}
+
+/* ---- Améliorations 26/11/2026 (audits Impeccable, Hallmark, Claude SEO, Agent Browser) ---- */
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+footer h2.footer-h{color:#fff; font-size:1rem; line-height:1.3; margin-bottom:16px; font-family:var(--sans); font-weight:700;}
+.assoc-card h2.assoc-h{font-size:1rem; margin-bottom:8px;}
+.pricing-card h2{color:#fff; font-size:1.5rem;}
+.i-inline{display:inline-block; width:1em; height:1em; vertical-align:-0.14em; margin-right:6px; flex:none;}
+.hero-badges .badge{display:inline-flex; align-items:center; color:#fff; font-weight:600; text-shadow:0 1px 10px rgba(0,0,0,.55);}
+/* Titres équilibrés, chiffres alignés */
+h1,h2,h3{text-wrap:balance;}
+p{text-wrap:pretty;}
+.stat-num{font-variant-numeric:tabular-nums;}
+/* Retour tactile au clic */
+.btn:active, .cookie-btn:active, .map-load-btn:active{transform:translateY(0) scale(0.98);}
+/* Accueil : 7 rubriques sur 4 colonnes (4 + 3) au lieu d'une carte orpheline */
+@media (min-width:1100px){ .explore-grid{grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px;} }
+/* Bandeau cookies : discret en bas à gauche sur grand écran, ne masque plus le bouton du hero */
+@media (min-width:900px){
+  .cookie-banner{left:20px; right:auto; bottom:20px; justify-content:flex-start;}
+  .cookie-banner-inner{max-width:430px; padding:16px 18px;}
+  .cookie-banner-text{font-size:.84rem;}
+  .cookie-btn{min-width:0; flex:1; padding:9px 16px;}
+}
+@media (max-width:560px){
+  .cookie-banner-inner{padding:14px 16px;}
+  .cookie-banner-title{font-size:1rem; margin-bottom:4px;}
+  .cookie-banner-text{font-size:.8rem; margin-bottom:10px;}
+  .cookie-btn{padding:9px 12px;}
+}
+/* Mobile : bouton principal visible dès l'arrivée */
+@media (max-width:600px){
+  .hero{padding-top:28px!important;}
+  .hero-title-hook{font-size:clamp(2.5rem, 11vw, 3.2rem);}
+  .hero-title-sub{font-size:1.15rem;}
+  .hero-tagline{display:none;}
+  .hero-highlights{gap:8px; margin-bottom:20px;}
+  .hero h1{margin-bottom:14px;}
+}
+/* Animation du lien « Découvrir » coupée si l'utilisateur limite les animations */
+.scroll-cue:hover, .scroll-cue:focus-visible{animation-play-state:paused;}
+@media (prefers-reduced-motion: reduce){
+  .scroll-cue{animation:none;}
+  html{scroll-behavior:auto;}
+  .btn:hover, .btn:active{transform:none;}
+}
+/* Crédits photo lisibles (contraste AA) */
+.env-photo-credit, .env-modal-credit, .agenda-cat-credit{opacity:1; font-size:0.72rem;}
+.map-gate-note{opacity:0.9;}

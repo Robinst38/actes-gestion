@@ -22,14 +22,14 @@
 <link rel="icon" href="../favicon.svg">
 <link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <link href="../fonts.css?v=20261021m" rel="stylesheet"/>
-<link rel="stylesheet" href="../style.css?v=20261024b"/>
+<link rel="stylesheet" href="../style.css?v=20261126a"/>
 </head>
 <body>
 <header>
 <div class="nav-wrap container">
 <a class="brand" href="index.html">
 <span class="brand-mark">
-<svg height="26" viewbox="0 0 200 200" width="26">
+<svg height="26" viewbox="0 0 200 200" width="26" aria-hidden="true" focusable="false">
 <circle cx="146" cy="54" fill="#b98d46" r="12"></circle>
 <polygon fill="#faf6ef" opacity="0.35" points="12,152 64,72 108,152"></polygon>
 <polygon fill="#faf6ef" opacity="0.22" points="96,152 138,88 178,152"></polygon>
@@ -58,7 +58,7 @@
 <div class="nav-cta">
 <div class="lang-switch" aria-label="Langue / Language"><a href="../environs.html" hreflang="fr" lang="fr">FR</a><a href="../en/environs.html" hreflang="en" lang="en">EN</a><a href="environs.html" hreflang="es" lang="es" aria-current="true">ES</a></div>
 <a aria-label="Socios" class="nav-account" href="../login.html" title="Socios">
-<svg fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="17"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+<svg fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="17" aria-hidden="true" focusable="false"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
 <span class="nav-account-label">Socios</span>
 </a>
 <a class="btn btn-dark" href="../reservation.html">Reservar</a>
@@ -79,25 +79,26 @@
 
 <section id="environs">
 <div class="container">
+<h2 class="sr-only">Lugares y actividades cercanos</h2>
 <div class="env-photo-grid">
 <div class="env-photo-card env-photo-card-static" data-reveal="">
-<div class="env-photo-wrap"><img alt="Balneario de Luchon" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../thermes-de-luchon-bagneres-de-luchon.jpg"/><span class="env-photo-dist">~1 km</span></div>
+<div class="env-photo-wrap"><img width="480" height="640" alt="Balneario de Luchon" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../thermes-de-luchon-bagneres-de-luchon.jpg"/><span class="env-photo-dist">~1 km</span></div>
 <div class="env-photo-body"><h3>Balneario de Luchon</h3><p>Termalismo desde la época romana, relanzado en el siglo XVIII por el barón de Étigny: curas termales, el Vaporarium (galerías subterráneas calentadas por el vapor termal) y zona de relax en pleno centro.</p></div>
 </div>
 <div class="env-photo-card env-photo-card-static" data-reveal="">
-<div class="env-photo-wrap"><img alt="Luchon-Superbagnères" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../luchon-superbagneres-bagneres-de-luchon.jpg"/><span class="env-photo-dist">≈25 min · 18 km</span></div>
+<div class="env-photo-wrap"><img width="800" height="600" alt="Luchon-Superbagnères" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../luchon-superbagneres-bagneres-de-luchon.jpg"/><span class="env-photo-dist">≈25 min · 18 km</span></div>
 <div class="env-photo-body"><h3>Luchon-Superbagnères</h3><p>Esquí, trineo y raquetas a más de 1.800 m de altitud, por carretera o en telecabina (8 min de subida) desde el valle. Mirador con vistas al pico Aneto (3.404 m).</p></div>
 </div>
 <div class="env-photo-card env-photo-card-static" data-reveal="">
-<div class="env-photo-wrap"><img alt="Peyragudes" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../peyragudes-bagneres-de-luchon.webp"/><span class="env-photo-dist">≈20 min · 17,7 km</span></div>
+<div class="env-photo-wrap"><img width="975" height="650" alt="Peyragudes" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../peyragudes-bagneres-de-luchon.webp"/><span class="env-photo-dist">≈20 min · 17,7 km</span></div>
 <div class="env-photo-body"><h3>Peyragudes</h3><p>Segundo dominio esquiable cercano, conocido por su altipuerto donde se rodó una escena de James Bond «El mañana nunca muere», apodado desde entonces «Altiport 007».</p></div>
 </div>
 <div class="env-photo-card env-photo-card-static" data-reveal="">
-<div class="env-photo-wrap"><img alt="Lago de Oô" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../lac-d-oo-bagneres-de-luchon.jpg"/><span class="env-photo-dist">≈25 min · 15 km</span></div>
+<div class="env-photo-wrap"><img width="680" height="510" alt="Lago de Oô" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../lac-d-oo-bagneres-de-luchon.jpg"/><span class="env-photo-dist">≈25 min · 15 km</span></div>
 <div class="env-photo-body"><h3>Lago de Oô</h3><p>Excursión familiar imprescindible (6,6 km ida y vuelta, 2 h 30-3 h desde las Granges d’Astau) hasta un lago glaciar a 1.507 m dominado por una de las cascadas más altas de los Pirineos (~275 m).</p></div>
 </div>
 <div class="env-photo-card env-photo-card-static" data-reveal="">
-<div class="env-photo-wrap"><img alt="Valle del Lys y Hospice de France" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../vallee-du-lys-etamp-hospice-de-france-bagnere.jpg"/><span class="env-photo-dist">≈15 min · 10 km</span></div>
+<div class="env-photo-wrap"><img width="600" height="1016" alt="Valle del Lys y Hospice de France" loading="lazy" onerror="this.closest('.env-photo-wrap').classList.add('img-fallback')" src="../vallee-du-lys-etamp-hospice-de-france-bagnere.jpg"/><span class="env-photo-dist">≈15 min · 10 km</span></div>
 <div class="env-photo-body"><h3>Valle del Lys y Hospice de France</h3><p>La cascada de Enfer (70 m) se alcanza a pie desde el aparcamiento del valle del Lys. Más al sur, el Hospice de France (1.385 m) da acceso al GR10 y al puerto de Benasque, hacia España.</p></div>
 </div>
 <div class="env-photo-card env-photo-card-static" data-reveal="">
@@ -118,11 +119,11 @@
 <div class="container">
 <div class="footer-grid">
 <div class="footer-brand">
-<h4>Chalet Bellevue</h4>
+<h2 class="footer-h">Chalet Bellevue</h2>
 <p>Chalet de 24 plazas en Bagnères-de-Luchon (Pirineo francés), gestionado por la asociación sin ánimo de lucro A.C.T.E.S.</p>
 </div>
 <div>
-<h4>Páginas</h4>
+<h2 class="footer-h">Páginas</h2>
 <ul>
 <li><a href="chalet.html">El chalet</a></li>
 <li><a href="groupes.html">Grupos y eventos</a></li>
@@ -134,7 +135,7 @@
 </ul>
 </div>
 <div>
-<h4>Contacto</h4>
+<h2 class="footer-h">Contacto</h2>
 <ul>
 <li>La junta de la asociación</li>
 <li><a href="mailto:contact@chalet-bellevue.fr"><span class="__cf_email__"><span class="__cf_email__"><span class="__cf_email__"><span class="__cf_email__">contact@chalet-bellevue.fr</span></span></span></span></a></li>
@@ -142,9 +143,9 @@
 </ul>
 </div>
 <div>
-<h4>Ubicación</h4>
+<h2 class="footer-h">Ubicación</h2>
 <div class="map-embed map-embed-gated" id="footer-map-wrap">
-<button type="button" class="map-load-btn" id="footer-map-load">📍 Mostrar el mapa</button>
+<button type="button" class="map-load-btn" id="footer-map-load"><svg class="i-inline" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11a8 8 0 0 1 16 0c0 6.5-8 11-8 11z"/><circle cx="12" cy="11" r="3"/></svg>Mostrar el mapa</button>
 <p class="map-gate-note">Carga un mapa de Google Maps (instala cookies de terceros).</p>
 </div>
 </div>

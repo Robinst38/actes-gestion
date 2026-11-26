@@ -18,7 +18,7 @@
 <link rel="icon" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="fonts.css?v=20261021m" rel="stylesheet"/>
-<link rel="stylesheet" href="style.css?v=20261024b"/>
+<link rel="stylesheet" href="style.css?v=20261126a"/>
 <meta name="referrer" content="no-referrer"/>
 </head>
 <body>
@@ -26,7 +26,7 @@
 <div class="nav-wrap container">
 <a class="brand" href="index.html">
 <span class="brand-mark">
-<svg height="26" viewbox="0 0 200 200" width="26">
+<svg height="26" viewbox="0 0 200 200" width="26" aria-hidden="true" focusable="false">
 <circle cx="146" cy="54" fill="#b98d46" r="12"></circle>
 <polygon fill="#faf6ef" opacity="0.35" points="12,152 64,72 108,152"></polygon>
 <polygon fill="#faf6ef" opacity="0.22" points="96,152 138,88 178,152"></polygon>
@@ -56,7 +56,7 @@
 <div class="nav-cta">
 <div class="lang-switch" aria-label="Langue / Language"><a href="index.html" hreflang="fr" lang="fr" aria-current="true">FR</a><a href="en/index.html" hreflang="en" lang="en">EN</a><a href="es/index.html" hreflang="es" lang="es">ES</a></div>
 <a aria-label="Espace membres" class="nav-account" href="login.html" title="Espace membres">
-<svg fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="17"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+<svg fill="none" height="17" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="17" aria-hidden="true" focusable="false"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
 <span class="nav-account-label">Espace membres</span>
 </a>
 <a class="btn btn-dark" href="reservation.html">Réserver</a>
@@ -85,11 +85,11 @@
 <div class="container">
 <div class="footer-grid">
 <div class="footer-brand">
-<h4>Chalet Bellevue</h4>
+<h2 class="footer-h">Chalet Bellevue</h2>
 <p>Chalet de 24 couchages à Bagnères-de-Luchon, géré par l'association A.C.T.E.S (loi 1901).</p>
 </div>
 <div>
-<h4>Navigation</h4>
+<h2 class="footer-h">Navigation</h2>
 <ul>
 <li><a href="chalet.html">Le chalet &amp; équipements</a></li>
 <li><a href="groupes.html">Groupes &amp; événements</a></li>
@@ -103,7 +103,7 @@
 </ul>
 </div>
 <div>
-<h4>Contact</h4>
+<h2 class="footer-h">Contact</h2>
 <ul>
 <li>Le bureau de l'association</li>
 <li><a href="mailto:contact@chalet-bellevue.fr"><span class="__cf_email__"><span class="__cf_email__"><span class="__cf_email__"><span class="__cf_email__">contact@chalet-bellevue.fr</span></span></span></span></a></li>
@@ -111,9 +111,9 @@
 </ul>
 </div>
 <div>
-<h4>Localisation</h4>
+<h2 class="footer-h">Localisation</h2>
 <div class="map-embed map-embed-gated" id="footer-map-wrap">
-<button type="button" class="map-load-btn" id="footer-map-load">📍 Afficher la carte</button>
+<button type="button" class="map-load-btn" id="footer-map-load"><svg class="i-inline" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11a8 8 0 0 1 16 0c0 6.5-8 11-8 11z"/><circle cx="12" cy="11" r="3"/></svg>Afficher la carte</button>
 <p class="map-gate-note">Charge une carte Google Maps (dépose des cookies tiers).</p>
 </div>
 </div>

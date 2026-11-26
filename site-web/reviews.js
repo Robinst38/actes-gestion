@@ -112,7 +112,7 @@
       renderReviews(list);
       injectAggregateRatingJsonLd(list);
     } catch (e) {
-      if (wrap) wrap.innerHTML = '<p class="empty-state">Impossible de charger les avis pour le moment.</p>';
+      if (wrap) wrap.innerHTML = '<p class="empty-state">Aucun avis publié pour le moment — soyez les premiers à en laisser un !</p>';
     }
   }
 
