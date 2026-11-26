@@ -10,9 +10,17 @@ document.getElementById('year') && (document.getElementById('year').textContent 
 const toggle = document.querySelector('.menu-toggle');
 const navList = document.querySelector('nav ul');
 if (toggle) {
+  toggle.setAttribute('aria-expanded', 'false');
   toggle.addEventListener('click', () => {
     navList.classList.toggle('open');
     toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', navList.classList.contains('open') ? 'true' : 'false');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navList && navList.classList.contains('open')) {
+      navList.classList.remove('open'); toggle.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false'); toggle.focus();
+    }
   });
 }
 document.querySelectorAll('nav a').forEach((a) => {
@@ -89,6 +97,9 @@ if(zoomImgs.length){
 
   const lbOverlay = document.createElement('div');
   lbOverlay.className = 'lightbox-overlay';
+  lbOverlay.setAttribute('role', 'dialog');
+  lbOverlay.setAttribute('aria-modal', 'true');
+  lbOverlay.setAttribute('aria-label', 'Photo agrandie');
   lbOverlay.innerHTML =
     '<button type="button" class="lightbox-close" aria-label="Fermer">&times;</button>' +
     '<button type="button" class="lightbox-prev" aria-label="Photo précédente">&#8249;</button>' +
@@ -102,6 +113,7 @@ if(zoomImgs.length){
   const lbClose = lbOverlay.querySelector('.lightbox-close');
   let lbGroup = [];
   let lbIndex = 0;
+  let lbTrigger = null;
 
   const lbCaptionFor = (img) => {
     const fig = img.closest('figure');
@@ -123,18 +135,25 @@ if(zoomImgs.length){
   const lbOpen = (img) => {
     lbGroup = zoomGroups[img.dataset.lightboxGroup || 'default'];
     lbShow(lbGroup.indexOf(img));
+    lbTrigger = img;
     lbOverlay.classList.add('is-open');
     document.body.classList.add('lightbox-locked');
     document.body.style.overflow = 'hidden';
+    lbClose.focus();
   };
   const lbClosePanel = () => {
     lbOverlay.classList.remove('is-open');
     document.body.classList.remove('lightbox-locked');
     document.body.style.overflow = '';
+    if (lbTrigger) lbTrigger.focus();
   };
 
   zoomImgs.forEach((img) => {
+    img.setAttribute('tabindex', '0');
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', 'Agrandir : ' + (img.alt || 'photo'));
     img.addEventListener('click', () => lbOpen(img));
+    img.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lbOpen(img); } });
   });
   lbClose.addEventListener('click', lbClosePanel);
   lbOverlay.addEventListener('click', (e) => { if(e.target === lbOverlay) lbClosePanel(); });
@@ -143,6 +162,12 @@ if(zoomImgs.length){
   document.addEventListener('keydown', (e) => {
     if(!lbOverlay.classList.contains('is-open')) return;
     if(e.key === 'Escape') lbClosePanel();
+    else if(e.key === 'Tab') {
+      const f = Array.prototype.filter.call(lbOverlay.querySelectorAll('button'), (b) => b.style.display !== 'none');
+      const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    }
     else if(e.key === 'ArrowLeft') lbShow(lbIndex - 1);
     else if(e.key === 'ArrowRight') lbShow(lbIndex + 1);
   });

@@ -1335,3 +1335,17 @@ p{text-wrap:pretty;}
 /* Crédits photo lisibles (contraste AA) */
 .env-photo-credit, .env-modal-credit, .agenda-cat-credit{opacity:1; font-size:0.72rem;}
 .map-gate-note{opacity:0.9;}
+/* Passe UI Skills / Jakub Krehel / Taste (26/11/2026) */
+.skip-link{position:absolute; left:12px; top:-60px; z-index:10000; background:var(--forest); color:#fff; padding:10px 16px; border-radius:8px; font-weight:600; text-decoration:none;}
+.skip-link:focus{top:12px; outline:3px solid var(--gold); outline-offset:2px;}
+.scroll-cue:focus-visible{outline:2px solid #fff; outline-offset:4px; border-radius:6px;}
+.hero .eyebrow{text-shadow:0 1px 10px rgba(0,0,0,.55);}
+.review-star-input{color:#9a8f7c;}
+.review-star-input:focus-visible{outline:2px solid var(--forest); outline-offset:2px; border-radius:4px;}
+@media (max-width:600px){
+  .hero{background:
+    linear-gradient(0deg, rgba(22,42,29,0.42) 0%, rgba(22,42,29,0.08) 28%, rgba(22,42,29,0.08) 58%, rgba(22,42,29,0.32) 100%),
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(16,32,21,0.58) 0%, rgba(16,32,21,0.34) 48%, rgba(16,32,21,0.08) 78%),
+    url("hero-chalet-neige-900.jpg") center 30%/cover no-repeat;}
+}
+.zoomable-img:focus-visible{outline:3px solid var(--terracotta-dark); outline-offset:3px;}
