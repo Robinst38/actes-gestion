@@ -519,8 +519,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (q === 'off') sessionStorage.setItem('bkDirect', '0');
     if (sessionStorage.getItem('bkDirect') !== '0') {
       const b = document.getElementById('bk-pay-online-btn');
-      b.textContent = "Réserver et payer les arrhes en ligne";
-      b.style.setProperty('display', 'inline-flex', 'important');
+      b.style.setProperty('display', 'flex', 'important');
+      const or = document.getElementById('bk-or'); if (or) or.style.display = 'flex';
     }
   } catch (e) { /* navigation privée stricte : bouton masqué */ }
   document.getElementById('bk-request-btn').addEventListener('click', () => {
@@ -578,3 +578,20 @@ document.addEventListener('DOMContentLoaded', function () {
   bind('bk-adults-count', 'adults', 1);
   bind('bk-minors-count', 'minors', 0);
 });
+
+/* Choix du mode de réservation : un seul à la fois, bouton d'envoi adapté (28/11/2026) */
+(function () {
+  const on = document.getElementById('bk-pay-online-btn');
+  const off = document.getElementById('bk-request-btn');
+  const submit = document.getElementById('bk-form-submit');
+  if (!on || !off || !submit) return;
+  const pick = (which) => {
+    on.classList.toggle('is-selected', which === 'online');
+    off.classList.toggle('is-selected', which === 'offline');
+    on.setAttribute('aria-pressed', which === 'online' ? 'true' : 'false');
+    off.setAttribute('aria-pressed', which === 'offline' ? 'true' : 'false');
+    submit.textContent = which === 'online' ? 'Continuer vers le paiement des arrhes' : 'Envoyer ma demande';
+  };
+  on.addEventListener('click', () => pick('online'));
+  off.addEventListener('click', () => pick('offline'));
+})();

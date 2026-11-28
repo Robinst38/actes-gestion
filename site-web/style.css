@@ -1349,3 +1349,16 @@ p{text-wrap:pretty;}
     url("hero-chalet-neige-900.jpg") center 30%/cover no-repeat;}
 }
 .zoomable-img:focus-visible{outline:3px solid var(--terracotta-dark); outline-offset:3px;}
+
+/* Réservation : choix « payer en ligne » OU « demande » (28/11/2026) */
+.bk-choice-title{font-weight:700; color:var(--forest); margin:0 0 2px;}
+.booking-actions .bk-choice{display:flex; flex-direction:column; gap:4px; text-align:left; text-decoration:none; padding:14px 16px; border:2px solid var(--line, #e3dccd); border-radius:14px; background:#fff; color:var(--ink); transition:border-color .2s ease, background-color .2s ease, transform .15s ease;}
+.booking-actions .bk-choice:hover{border-color:var(--forest);}
+.booking-actions .bk-choice:active{transform:scale(.99);}
+.booking-actions .bk-choice:focus-visible{outline:3px solid var(--terracotta-dark, #a9552f); outline-offset:2px;}
+.booking-actions .bk-choice.is-selected{border-color:var(--forest); background:#eef3ee; box-shadow:inset 0 0 0 1px var(--forest);}
+.bk-choice-name{font-weight:700; color:var(--forest); font-size:1rem;}
+.bk-choice--online .bk-choice-name{color:var(--terracotta-dark, #a9552f);}
+.bk-choice-desc{font-size:.86rem; color:var(--ink-soft); line-height:1.45;}
+.bk-or{display:none; align-items:center; gap:12px; color:var(--ink-soft); font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em;}
+.bk-or::before,.bk-or::after{content:""; flex:1; height:1px; background:var(--line, #e3dccd);}
