@@ -578,3 +578,6 @@ document.addEventListener('DOMContentLoaded', function () {
   bind('bk-adults-count', 'adults', 1);
   bind('bk-minors-count', 'minors', 0);
 });
+
+/* Prix du ménage affiché à côté de la case (28/11/2026) */
+(function () { var el = document.getElementById('bk-cleaning-price'); if (el) el.textContent = RATE_CONFIG.cleaningFee + ' ' + RATE_CONFIG.currency; })();
